@@ -1,0 +1,1309 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+  <meta charset="utf-8">
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Two test-driven problem sets for weeks 3 to 6 of the Health IT Semester.">
+
+  <title>Week 6 practice &middot; Health IT Semester</title>
+
+  <link rel="stylesheet" href="static/css/main.css">
+  <link rel="stylesheet" href="static/css/syntax.css">
+  <link rel="stylesheet" href="static/css/health-it.css">
+  <script defer src="static/js/sidenotes.js"></script>
+</head>
+
+
+  <body>
+
+    <div id="nav-bg">
+  <nav id="top-nav">
+    <a href="index.html" id="logo">./health-it-semester</a>
+    <input type="checkbox" id="menu-icon">
+    <label class="menu-label" for="menu-icon"></label>
+    <div class="trigger">
+      <div class="trigger-child">
+        <span class="nav-link"><a href="weeks.html">weeks</a></span>
+        <span class="nav-link"><a href="reference.html">reference</a></span>
+        <span class="nav-link"><a href="about.html">about</a></span>
+      </div>
+    </div>
+  </nav>
+</div>
+
+
+    <div id="content">
+
+<h1 class="title">Week 6 practice</h1>
+<h2 class="subtitle">Ship + get hired · 9 exercises</h2>
+
+<p>The full text of every practice problem that fits <a href="week-6.html">week 6</a>, grouped by lecture section. Set up the two sets first: the commands are on the <a href="practice.html#the-two-sets">practice problems</a> page. Each reference solution is collapsed under its exercise; run the tests before you open it.</p>
+
+<ul>
+  <li><a href="#deploying-an-oie-channel">Deploying an OIE channel</a>: <a href="#mellp-31">mellp 31</a>, <a href="#mellp-lab-b">mellp Lab B</a></li>
+  <li><a href="#replaying-a-day">Replaying a day of traffic safely</a>: <a href="#hl7-practice-15">hl7-practice 15</a>, <a href="#hl7-practice-16">hl7-practice 16</a>, <a href="#mellp-22">mellp 22</a>, <a href="#mellp-27">mellp 27</a>, <a href="#mellp-28">mellp 28</a></li>
+  <li><a href="#when-the-bridge-goes-down">When the bridge goes down</a>: <a href="#mellp-29">mellp 29</a>, <a href="#mellp-30">mellp 30</a></li>
+</ul>
+
+<h1 id="deploying-an-oie-channel">Deploying an OIE channel</h1>
+
+<p>Lecture: <a href="week-6.html#deploying-an-oie-channel">Deploying an OIE channel</a>.</p>
+
+<h2 id="mellp-31">mellp 31: Mini Interface Engine</h2>
+
+<p><code>Hard</code> · engine · routing · sqlite · threads · python-hl7</p>
+<p>Everything from this part in one process: receive over MLLP, route by type, validate, transform, forward, log, and answer the sender. This is the core loop of every interface engine. The interesting part is not any one step but how they interact: what the sender is told when the receiver is down, what the log says afterwards, and what happens when the sender retransmits.</p>
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">Route</span><span class="p">:</span>
+    <span class="n">host</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">port</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">receiving_app</span><span class="p">:</span> <span class="nb">str</span>
+
+<span class="k">class</span> <span class="nc">Engine</span><span class="p">:</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">routes</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Route</span><span class="p">],</span> <span class="n">db_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">retries</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span> <span class="n">timeout</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+    <span class="k">def</span> <span class="nf">serve</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">listener</span><span class="p">:</span> <span class="n">socket</span><span class="o">.</span><span class="n">socket</span><span class="p">,</span> <span class="n">stop</span><span class="p">:</span> <span class="n">threading</span><span class="o">.</span><span class="n">Event</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+</code></pre></div></div>
+<p><code>Route</code> and the table schema are in the stub. <code>Engine(routes, db_path)</code> creates the <code>messages</code> table (problem 27's) in the SQLite file if it is missing:</p>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">CREATE</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="k">IF</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">EXISTS</span><span class="w"> </span><span class="n">messages</span><span class="w"> </span><span class="p">(</span>
+<span class="w">    </span><span class="n">id</span><span class="w">           </span><span class="nb">INTEGER</span><span class="w"> </span><span class="k">PRIMARY</span><span class="w"> </span><span class="k">KEY</span><span class="w"> </span><span class="n">AUTOINCREMENT</span><span class="p">,</span>
+<span class="w">    </span><span class="n">received_at</span><span class="w">  </span><span class="nb">TEXT</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="p">,</span>
+<span class="w">    </span><span class="n">direction</span><span class="w">    </span><span class="nb">TEXT</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="p">,</span>
+<span class="w">    </span><span class="n">control_id</span><span class="w">   </span><span class="nb">TEXT</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="p">,</span>
+<span class="w">    </span><span class="n">message_type</span><span class="w"> </span><span class="nb">TEXT</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="p">,</span>
+<span class="w">    </span><span class="n">status</span><span class="w">       </span><span class="nb">TEXT</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="w"> </span><span class="k">DEFAULT</span><span class="w"> </span><span class="s1">&#39;received&#39;</span><span class="p">,</span>
+<span class="w">    </span><span class="n">detail</span><span class="w">       </span><span class="nb">TEXT</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="w"> </span><span class="k">DEFAULT</span><span class="w"> </span><span class="s1">&#39;&#39;</span><span class="p">,</span>
+<span class="w">    </span><span class="n">raw</span><span class="w">          </span><span class="nb">TEXT</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span>
+<span class="p">)</span>
+</code></pre></div></div>
+<p><code>serve</code> accepts upstream connections on <code>listener</code> until <code>stop</code> is set, and returns within 1 s after that. Upstream connections are long-lived (many messages each) and are served concurrently: a slow downstream for one sender must not hold up another sender. Each inbound message is handled in this order:</p>
+<ol>
+<li><strong>Route.</strong> Look up the exact type (<code>ADT^A01</code>, from MSH-9.1 and MSH-9.2), then the wildcard (<code>ADT^*</code>), in <code>routes</code>. No route: reply <code>AR</code> with MSA-3 <code>no route for ADT^A01</code>, log status <code>rejected</code>.</li>
+<li><strong>Validate.</strong> PID-3.1 empty: reply <code>AE</code> with MSA-3 <code>PID-3 is required</code>, log status <code>error</code>. Nothing is forwarded.</li>
+<li><strong>Duplicate.</strong> If a row with this control ID (MSH-10) and status <code>sent</code> is already in the table, reply <code>AA</code>, log status <code>duplicate</code>, forward nothing.</li>
+<li><strong>Transform.</strong> The forwarded copy has MSH-5 set to the route's <code>receiving_app</code> and every segment whose name starts with <code>Z</code> removed. Nothing else changes.</li>
+<li><strong>Forward.</strong> Open a connection to the route's host and port, send the copy as an MLLP block, and wait for the reply block. Connecting and each read use <code>timeout</code> seconds. On <code>TimeoutError</code>, <code>ConnectionError</code> (subclasses included, and a peer that closes before replying counts as one) or a reply with MSA-1 <code>AE</code>, try again on a new connection, up to <code>retries</code> more times. A reply with MSA-1 <code>AR</code> is not retried.</li>
+<li><strong>Answer.</strong> Downstream <code>AA</code>: log status <code>sent</code>, reply <code>AA</code>. Downstream <code>AR</code>, or retries used up: log status <code>dead</code> with <code>detail</code> = the reason from the last attempt, reply <code>AE</code> with the same reason in MSA-3. A reason is <code>AR: &lt;MSA-3&gt;</code> or <code>AE: &lt;MSA-3&gt;</code> from the downstream reply, or the exception's class name (<code>TimeoutError</code>, <code>ConnectionRefusedError</code>, ...).</li>
+</ol>
+<p>The log gets exactly one row per inbound message: <code>direction</code> = <code>in</code>, <code>control_id</code> = MSH-10, <code>message_type</code> like <code>ADT^A01</code>, <code>received_at</code> = UTC time in ISO 8601, the final <code>status</code>, <code>detail</code> (empty unless stated above), and <code>raw</code> = the message exactly as received. The row is committed before the reply goes upstream.</p>
+<p>Every upstream reply is an ACK whose MSA-2 is the inbound MSH-10.</p>
+<p><strong>Example 1:</strong></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>routes = {&quot;ADT^A01&quot;: Route(host, 2575, &quot;BEDS&quot;), &quot;ADT^*&quot;: Route(host, 2576, &quot;ARCHIVE&quot;)}
+upstream sends ADT^A01 MSG1, with a ZPI segment     -&gt; AA MSG1
+    port 2575 received it with MSH-5 = BEDS and no ZPI; row: MSG1 sent
+upstream sends ADT^A08 MSG2                         -&gt; AA MSG2      (via ADT^*, to 2576)
+upstream sends ORU^R01 MSG3                         -&gt; AR MSG3 &quot;no route for ORU^R01&quot;
+</code></pre></div></div>
+<p><strong>Example 2:</strong></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>retries=2; port 2575 answers AE, closes without replying, then AA
+upstream sends ADT^A01 MSG4                         -&gt; AA MSG4      (3 connections downstream)
+port 2575 now answers AR &quot;unknown patient&quot;
+upstream sends ADT^A01 MSG5                         -&gt; AE MSG5 &quot;AR: unknown patient&quot;; row: dead
+upstream sends ADT^A01 MSG4 again                   -&gt; AA MSG4; nothing forwarded; row: duplicate
+</code></pre></div></div>
+<p><strong>Constraints:</strong></p>
+<ul>
+<li>Inbound messages are well-formed UTF-8 HL7 with an MSH (MSH-9 has a code and a trigger) and a PID.</li>
+<li>Upstream senders wait for each reply before sending the next message on the same connection.</li>
+<li>The listener is open and owned by the caller; do not close it. Tests read the database with their own <code>sqlite3</code> connection after <code>serve</code> has returned.</li>
+<li>The same control ID is never in flight on two connections at once.</li>
+</ul>
+<p><strong>Follow-up:</strong> this engine ACKs upstream only after downstream answered, so a slow lab system slows the registration desk. Problem 30 shows the alternative: ACK once the message is safely queued. What does the sender lose with that design, and what do you gain?</p>
+<details>
+<summary>Hint 1</summary>
+<p>sqlite3 connections may only be used by the thread that created them (unless you pass <code>check_same_thread=False</code> and add your own lock). Opening one connection per upstream connection thread, in autocommit mode with <code>isolation_level=None</code>, sidesteps both problems.</p>
+</details>
+<details>
+<summary>Hint 2</summary>
+<p>python-hl7 covers most of the message work: <code>msg["MSH.F9.R1.C1"]</code>, <code>msg["PID.F3.R1.C1"]</code>, <code>msg.assign_field("BEDS", "MSH", 1, 5)</code>, and <code>msg.create_ack("AE")</code>, which echoes MSH-10 into MSA-2. <code>create_ack</code> has no MSA-3 parameter, but <code>ack.assign_field(text, "MSA", 1, 3)</code> adds one. Reuse problem 16's client for each forward and problem 20's thread-per-connection server for upstream, with timeouts on <code>accept</code> and <code>recv</code> so <code>stop</code> is noticed.</p>
+</details>
+
+<p>Write it in <a href="https://github.com/HeyItWorked/mellp/tree/main/problems/31-mini-interface-engine"><code>problems/31-mini-interface-engine/solution.py</code></a>, then run:</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>uv run pytest problems/31-*
+</code></pre></div></div>
+
+<details>
+<summary>Reference solution</summary>
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="nn">socket</span>
+<span class="kn">import</span> <span class="nn">sqlite3</span>
+<span class="kn">import</span> <span class="nn">threading</span>
+<span class="kn">from</span> <span class="nn">contextlib</span> <span class="kn">import</span> <span class="n">closing</span>
+<span class="kn">from</span> <span class="nn">dataclasses</span> <span class="kn">import</span> <span class="n">dataclass</span>
+<span class="kn">from</span> <span class="nn">datetime</span> <span class="kn">import</span> <span class="n">datetime</span><span class="p">,</span> <span class="n">timezone</span>
+
+<span class="kn">import</span> <span class="nn">hl7</span>
+
+<span class="n">SB</span> <span class="o">=</span> <span class="sa">b</span><span class="s2">&quot;</span><span class="se">\x0b</span><span class="s2">&quot;</span>
+<span class="n">EB</span> <span class="o">=</span> <span class="sa">b</span><span class="s2">&quot;</span><span class="se">\x1c\x0d</span><span class="s2">&quot;</span>
+
+<span class="n">SCHEMA</span> <span class="o">=</span> <span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">CREATE TABLE IF NOT EXISTS messages (</span>
+<span class="s2">    id           INTEGER PRIMARY KEY AUTOINCREMENT,</span>
+<span class="s2">    received_at  TEXT NOT NULL,</span>
+<span class="s2">    direction    TEXT NOT NULL,</span>
+<span class="s2">    control_id   TEXT NOT NULL,</span>
+<span class="s2">    message_type TEXT NOT NULL,</span>
+<span class="s2">    status       TEXT NOT NULL DEFAULT &#39;received&#39;,</span>
+<span class="s2">    detail       TEXT NOT NULL DEFAULT &#39;&#39;,</span>
+<span class="s2">    raw          TEXT NOT NULL</span>
+<span class="s2">)</span>
+<span class="s2">&quot;&quot;&quot;</span>
+
+
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">Route</span><span class="p">:</span>
+    <span class="n">host</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">port</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">receiving_app</span><span class="p">:</span> <span class="nb">str</span>
+
+
+<span class="k">class</span> <span class="nc">Engine</span><span class="p">:</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">routes</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Route</span><span class="p">],</span> <span class="n">db_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">retries</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span> <span class="n">timeout</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">routes</span> <span class="o">=</span> <span class="n">routes</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">db_path</span> <span class="o">=</span> <span class="n">db_path</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">retries</span> <span class="o">=</span> <span class="n">retries</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">timeout</span> <span class="o">=</span> <span class="n">timeout</span>
+        <span class="k">with</span> <span class="n">closing</span><span class="p">(</span><span class="n">sqlite3</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">db_path</span><span class="p">))</span> <span class="k">as</span> <span class="n">db</span><span class="p">:</span>
+            <span class="n">db</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">SCHEMA</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">serve</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">listener</span><span class="p">:</span> <span class="n">socket</span><span class="o">.</span><span class="n">socket</span><span class="p">,</span> <span class="n">stop</span><span class="p">:</span> <span class="n">threading</span><span class="o">.</span><span class="n">Event</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">listener</span><span class="o">.</span><span class="n">settimeout</span><span class="p">(</span><span class="mf">0.1</span><span class="p">)</span>  <span class="c1"># wake up regularly to look at `stop`</span>
+        <span class="k">while</span> <span class="ow">not</span> <span class="n">stop</span><span class="o">.</span><span class="n">is_set</span><span class="p">():</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">conn</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">listener</span><span class="o">.</span><span class="n">accept</span><span class="p">()</span>
+            <span class="k">except</span> <span class="ne">TimeoutError</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="n">worker</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="p">(</span><span class="n">target</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_serve_connection</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="p">(</span><span class="n">conn</span><span class="p">,</span> <span class="n">stop</span><span class="p">),</span> <span class="n">daemon</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <span class="n">worker</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">_serve_connection</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">conn</span><span class="p">:</span> <span class="n">socket</span><span class="o">.</span><span class="n">socket</span><span class="p">,</span> <span class="n">stop</span><span class="p">:</span> <span class="n">threading</span><span class="o">.</span><span class="n">Event</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="c1"># A sqlite3 connection may only be used by the thread that opened it: one per worker.</span>
+        <span class="n">db</span> <span class="o">=</span> <span class="n">sqlite3</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">db_path</span><span class="p">,</span> <span class="n">isolation_level</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+        <span class="n">conn</span><span class="o">.</span><span class="n">settimeout</span><span class="p">(</span><span class="mf">0.1</span><span class="p">)</span>
+        <span class="n">buffer</span> <span class="o">=</span> <span class="sa">b</span><span class="s2">&quot;&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">while</span> <span class="ow">not</span> <span class="n">stop</span><span class="o">.</span><span class="n">is_set</span><span class="p">():</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">chunk</span> <span class="o">=</span> <span class="n">conn</span><span class="o">.</span><span class="n">recv</span><span class="p">(</span><span class="mi">65536</span><span class="p">)</span>
+                <span class="k">except</span> <span class="ne">TimeoutError</span><span class="p">:</span>
+                    <span class="k">continue</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">chunk</span><span class="p">:</span>
+                    <span class="k">break</span>
+                <span class="n">buffer</span> <span class="o">+=</span> <span class="n">chunk</span>
+                <span class="k">while</span> <span class="p">(</span><span class="n">end</span> <span class="o">:=</span> <span class="n">buffer</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="n">EB</span><span class="p">))</span> <span class="o">!=</span> <span class="o">-</span><span class="mi">1</span><span class="p">:</span>
+                    <span class="n">payload</span> <span class="o">=</span> <span class="n">buffer</span><span class="p">[</span><span class="n">buffer</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="n">SB</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span> <span class="p">:</span> <span class="n">end</span><span class="p">]</span>
+                    <span class="n">buffer</span> <span class="o">=</span> <span class="n">buffer</span><span class="p">[</span><span class="n">end</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="n">EB</span><span class="p">)</span> <span class="p">:]</span>
+                    <span class="n">conn</span><span class="o">.</span><span class="n">sendall</span><span class="p">(</span><span class="n">SB</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="p">(</span><span class="n">payload</span><span class="o">.</span><span class="n">decode</span><span class="p">(),</span> <span class="n">db</span><span class="p">)</span> <span class="o">+</span> <span class="n">EB</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">OSError</span><span class="p">:</span>
+            <span class="k">pass</span>  <span class="c1"># upstream reset the connection</span>
+        <span class="k">finally</span><span class="p">:</span>
+            <span class="n">conn</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+            <span class="n">db</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">_handle</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">raw</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">db</span><span class="p">:</span> <span class="n">sqlite3</span><span class="o">.</span><span class="n">Connection</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bytes</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Processes one inbound message, logs it, and returns the upstream reply.&quot;&quot;&quot;</span>
+        <span class="n">message</span> <span class="o">=</span> <span class="n">hl7</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="n">raw</span><span class="p">)</span>
+        <span class="n">control_id</span> <span class="o">=</span> <span class="n">message</span><span class="p">[</span><span class="s2">&quot;MSH.F10&quot;</span><span class="p">]</span>
+        <span class="n">message_type</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;MSH.F9.R1.C1&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">^</span><span class="si">{</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;MSH.F9.R1.C2&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="n">status</span><span class="p">,</span> <span class="n">code</span><span class="p">,</span> <span class="n">detail</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_process</span><span class="p">(</span><span class="n">message</span><span class="p">,</span> <span class="n">raw</span><span class="p">,</span> <span class="n">message_type</span><span class="p">,</span> <span class="n">db</span><span class="p">)</span>
+        <span class="n">db</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+            <span class="s2">&quot;INSERT INTO messages&quot;</span>
+            <span class="s2">&quot; (received_at, direction, control_id, message_type, status, detail, raw)&quot;</span>
+            <span class="s2">&quot; VALUES (?, &#39;in&#39;, ?, ?, ?, ?, ?)&quot;</span><span class="p">,</span>
+            <span class="p">(</span><span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">(</span><span class="n">timezone</span><span class="o">.</span><span class="n">utc</span><span class="p">)</span><span class="o">.</span><span class="n">isoformat</span><span class="p">(),</span> <span class="n">control_id</span><span class="p">,</span> <span class="n">message_type</span><span class="p">,</span> <span class="n">status</span><span class="p">,</span> <span class="n">detail</span><span class="p">,</span> <span class="n">raw</span><span class="p">),</span>
+        <span class="p">)</span>
+        <span class="n">reply</span> <span class="o">=</span> <span class="n">message</span><span class="o">.</span><span class="n">create_ack</span><span class="p">(</span><span class="n">code</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">detail</span><span class="p">:</span>
+            <span class="n">reply</span><span class="o">.</span><span class="n">assign_field</span><span class="p">(</span><span class="n">detail</span><span class="p">,</span> <span class="s2">&quot;MSA&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="n">reply</span><span class="p">)</span><span class="o">.</span><span class="n">encode</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">_process</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">,</span> <span class="n">raw</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">message_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">db</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Returns (status to log, upstream ACK code, detail).&quot;&quot;&quot;</span>
+        <span class="n">wildcard</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">message</span><span class="p">[</span><span class="s1">&#39;MSH.F9.R1.C1&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">^*&quot;</span>
+        <span class="n">route</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">routes</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">message_type</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">routes</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">wildcard</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">route</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">&quot;rejected&quot;</span><span class="p">,</span> <span class="s2">&quot;AR&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;no route for </span><span class="si">{</span><span class="n">message_type</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">message</span><span class="p">[</span><span class="s2">&quot;PID.F3.R1.C1&quot;</span><span class="p">]:</span>
+            <span class="k">return</span> <span class="s2">&quot;error&quot;</span><span class="p">,</span> <span class="s2">&quot;AE&quot;</span><span class="p">,</span> <span class="s2">&quot;PID-3 is required&quot;</span>
+        <span class="n">already_sent</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+            <span class="s2">&quot;SELECT 1 FROM messages WHERE control_id = ? AND status = &#39;sent&#39;&quot;</span><span class="p">,</span>
+            <span class="p">(</span><span class="n">message</span><span class="p">[</span><span class="s2">&quot;MSH.F10&quot;</span><span class="p">],),</span>
+        <span class="p">)</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">already_sent</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">&quot;duplicate&quot;</span><span class="p">,</span> <span class="s2">&quot;AA&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span>
+        <span class="n">reason</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_forward</span><span class="p">(</span><span class="n">transform</span><span class="p">(</span><span class="n">raw</span><span class="p">,</span> <span class="n">route</span><span class="o">.</span><span class="n">receiving_app</span><span class="p">),</span> <span class="n">route</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">reason</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="s2">&quot;sent&quot;</span><span class="p">,</span> <span class="s2">&quot;AA&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span>
+        <span class="k">return</span> <span class="s2">&quot;dead&quot;</span><span class="p">,</span> <span class="s2">&quot;AE&quot;</span><span class="p">,</span> <span class="n">reason</span>
+
+    <span class="k">def</span> <span class="nf">_forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">payload</span><span class="p">:</span> <span class="nb">bytes</span><span class="p">,</span> <span class="n">route</span><span class="p">:</span> <span class="n">Route</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;None once downstream answers AA, otherwise why it never did.&quot;&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">retries</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="k">with</span> <span class="n">socket</span><span class="o">.</span><span class="n">create_connection</span><span class="p">((</span><span class="n">route</span><span class="o">.</span><span class="n">host</span><span class="p">,</span> <span class="n">route</span><span class="o">.</span><span class="n">port</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">timeout</span><span class="p">)</span> <span class="k">as</span> <span class="n">sock</span><span class="p">:</span>
+                    <span class="n">sock</span><span class="o">.</span><span class="n">sendall</span><span class="p">(</span><span class="n">SB</span> <span class="o">+</span> <span class="n">payload</span> <span class="o">+</span> <span class="n">EB</span><span class="p">)</span>
+                    <span class="n">reply</span> <span class="o">=</span> <span class="n">hl7</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="n">read_block</span><span class="p">(</span><span class="n">sock</span><span class="p">)</span><span class="o">.</span><span class="n">decode</span><span class="p">())</span>
+            <span class="k">except</span> <span class="p">(</span><span class="ne">TimeoutError</span><span class="p">,</span> <span class="ne">ConnectionError</span><span class="p">)</span> <span class="k">as</span> <span class="n">error</span><span class="p">:</span>
+                <span class="n">reason</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">error</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span>
+                <span class="k">continue</span>
+            <span class="k">if</span> <span class="n">reply</span><span class="p">[</span><span class="s2">&quot;MSA.F1&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;AA&quot;</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">None</span>
+            <span class="n">reason</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">reply</span><span class="p">[</span><span class="s1">&#39;MSA.F1&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">reply</span><span class="p">[</span><span class="s1">&#39;MSA.F3&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="k">if</span> <span class="n">reply</span><span class="p">[</span><span class="s2">&quot;MSA.F1&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;AR&quot;</span><span class="p">:</span>
+                <span class="k">break</span>
+        <span class="k">return</span> <span class="n">reason</span>
+
+
+<span class="k">def</span> <span class="nf">transform</span><span class="p">(</span><span class="n">raw</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">receiving_app</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bytes</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;MSH-5 becomes the route&#39;s receiving application; Z-segments are dropped.&quot;&quot;&quot;</span>
+    <span class="n">message</span> <span class="o">=</span> <span class="n">hl7</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="n">raw</span><span class="p">)</span>
+    <span class="n">message</span><span class="o">.</span><span class="n">assign_field</span><span class="p">(</span><span class="n">receiving_app</span><span class="p">,</span> <span class="s2">&quot;MSH&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">5</span><span class="p">)</span>
+    <span class="n">kept</span> <span class="o">=</span> <span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">segment</span><span class="p">)</span> <span class="k">for</span> <span class="n">segment</span> <span class="ow">in</span> <span class="n">message</span> <span class="k">if</span> <span class="ow">not</span> <span class="nb">str</span><span class="p">(</span><span class="n">segment</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;Z&quot;</span><span class="p">)]</span>
+    <span class="k">return</span> <span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">segment</span> <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\r</span><span class="s2">&quot;</span> <span class="k">for</span> <span class="n">segment</span> <span class="ow">in</span> <span class="n">kept</span><span class="p">)</span><span class="o">.</span><span class="n">encode</span><span class="p">()</span>
+
+
+<span class="k">def</span> <span class="nf">read_block</span><span class="p">(</span><span class="n">sock</span><span class="p">:</span> <span class="n">socket</span><span class="o">.</span><span class="n">socket</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bytes</span><span class="p">:</span>
+    <span class="n">buffer</span> <span class="o">=</span> <span class="sa">b</span><span class="s2">&quot;&quot;</span>
+    <span class="k">while</span> <span class="n">EB</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">buffer</span><span class="p">:</span>
+        <span class="n">chunk</span> <span class="o">=</span> <span class="n">sock</span><span class="o">.</span><span class="n">recv</span><span class="p">(</span><span class="mi">65536</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">chunk</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ConnectionError</span><span class="p">(</span><span class="s2">&quot;downstream closed before replying&quot;</span><span class="p">)</span>
+        <span class="n">buffer</span> <span class="o">+=</span> <span class="n">chunk</span>
+    <span class="k">return</span> <span class="n">buffer</span><span class="p">[</span><span class="n">buffer</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="n">SB</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span> <span class="p">:</span> <span class="n">buffer</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="n">EB</span><span class="p">)]</span>
+</code></pre></div></div>
+</details>
+
+<h2 id="mellp-lab-b">mellp Lab B: Your Python against a real interface engine</h2>
+
+<p><code>Lab</code> · mirth connect · open integration engine · 60 to 90 minutes</p>
+<p>So far both ends of every connection were Python. On the job, the other end is an interface engine. This lab puts Mirth Connect between your code and itself, so you can watch a production-grade engine frame, acknowledge, queue and retry, and see which of your earlier solutions survive contact with it.</p>
+<p>Every "what you should see" below was observed on Mirth Connect 4.5.2 with the two channels this lab deploys. Change a channel setting and the behaviour changes, which is the point of Part 3.</p>
+<h3>Setup</h3>
+<p>Needs Docker.</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>docker run -d --name mellp-engine \
+  -p 8443:8443 -p 6661:6661 -p 6662:6662 \
+  --add-host host.docker.internal:host-gateway \
+  nextgenhealthcare/connect:4.5.2
+
+uv run python labs/mirth/lab.py deploy     # creates and starts both channels (retry if the engine is still booting)
+uv run python labs/mirth/lab.py check      # proves the plumbing with known-good code
+</code></pre></div></div>
+<p><code>deploy</code> talks to the engine's REST API on <code>https://localhost:8443/api</code> with the default <code>admin</code> / <code>admin</code> login. The engine uses a self-signed certificate, so the script does not verify it; it is a local lab container, not something to copy into production code.</p>
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th>Channel</th>
+<th>Listens on</th>
+<th>Does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>mellp-in</code></td>
+<td>6661</td>
+<td>Accepts any message, discards it, replies with a generated ACK</td>
+</tr>
+<tr>
+<td><code>mellp-relay</code></td>
+<td>6662</td>
+<td>Forwards each message to <code>host.docker.internal:6671</code> (your Python) over MLLP, queues on failure, retries every 2 s, waits 5 s for a reply</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><code>uv run python labs/mirth/lab.py status</code> prints each channel's state and counters (received, queued, sent, error). Use it after every experiment.</p>
+<p>Open Integration Engine is the community fork of Mirth Connect 4.5.2 and takes the same channels: swap the image for <code>openintegrationengine/engine:latest</code> (<code>lab.py deploy</code> and <code>check</code> pass against it unchanged). When this lab was written that image was published for amd64 only, so on Apple Silicon it runs under emulation and needed about 100 seconds to start instead of 20.</p>
+<p>The engine's landing page at <code>https://localhost:8443</code> links to its own Administrator client and web dashboard. This lab does not need them: <code>lab.py status</code> shows the counters that matter here.</p>
+<h3>Part 1: your sender, their listener (port 6661)</h3>
+<p>Use your own code from the problems. From a Python prompt in the repo root (<code>uv run python</code>):</p>
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="nn">importlib.util</span>
+
+<span class="k">def</span> <span class="nf">load</span><span class="p">(</span><span class="n">problem</span><span class="p">):</span>                      <span class="c1"># &quot;16-send-and-wait&quot; -&gt; the module with your solution</span>
+    <span class="n">spec</span> <span class="o">=</span> <span class="n">importlib</span><span class="o">.</span><span class="n">util</span><span class="o">.</span><span class="n">spec_from_file_location</span><span class="p">(</span><span class="s2">&quot;s&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;problems/</span><span class="si">{</span><span class="n">problem</span><span class="si">}</span><span class="s2">/solution.py&quot;</span><span class="p">)</span>
+    <span class="n">module</span> <span class="o">=</span> <span class="n">importlib</span><span class="o">.</span><span class="n">util</span><span class="o">.</span><span class="n">module_from_spec</span><span class="p">(</span><span class="n">spec</span><span class="p">)</span>
+    <span class="n">spec</span><span class="o">.</span><span class="n">loader</span><span class="o">.</span><span class="n">exec_module</span><span class="p">(</span><span class="n">module</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">module</span>
+
+<span class="kn">from</span> <span class="nn">harness.hl7msg</span> <span class="kn">import</span> <span class="n">adt_a01</span>
+<span class="n">send</span> <span class="o">=</span> <span class="n">load</span><span class="p">(</span><span class="s2">&quot;16-send-and-wait&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">send</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">send</span><span class="p">(</span><span class="s2">&quot;127.0.0.1&quot;</span><span class="p">,</span> <span class="mi">6661</span><span class="p">,</span> <span class="n">adt_a01</span><span class="p">(</span><span class="s2">&quot;LAB1&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">encode</span><span class="p">()))</span>
+</code></pre></div></div>
+<ol>
+<li>Read the ACK the engine built. Compare it field by field with what your problem 09 <code>build_ack</code> produces for the same message.</li>
+<li>Send a block whose payload is <code>b"hello world"</code>. Is the reply an AA? Look closely at its MSH.</li>
+<li>Send an ADT with an empty PID-3 (<code>adt_a01("LAB2", patient={"mrn": ""})</code>). AA, AE or AR?</li>
+<li>With a raw socket or <code>harness.net.Client</code>, try the framing faults from Part 1 of the problems: two blocks in one write; one block in 40-byte pieces; a newline between two blocks; a block whose <code>0x1C</code> is not followed by <code>\r</code>; a message with no start byte; half a block and then silence.</li>
+<li>Open a problem 17 <code>Session</code> and push 500 messages through one connection. Then run problem 22's <code>blast</code> with 1, 4 and 8 connections and write down the rates.</li>
+</ol>
+<details>
+<summary>What you should see</summary>
+<ol>
+<li><code>MSH|^~\&amp;|LAB|HOSP|EPIC|HOSP|&lt;now&gt;||ACK^A01^ACK|&lt;now&gt;|P|2.5</code> then <code>MSA|AA|LAB1</code>. Parties swapped, trigger event echoed, MSH-10 is a timestamp, MSA-2 is your control ID.</li>
+<li>Yes, an AA. The engine reads "the five characters after the segment name" as delimiters even here, so the ACK comes back as <code>MSHlo wol...</code> with <code>l</code> as the field separator. An AA from a pass-through channel says the bytes arrived in a block. It says nothing about the content.</li>
+<li>AA. This channel has no validation. Rules like problem 10 and 13 exist only where somebody configured them.</li>
+<li>Two glued blocks: two ACKs. Pieces: one ACK once the block is complete. Newline between blocks: both acknowledged, the newline ignored (problem 04, rule 1). <code>0x1C</code> without <code>\r</code>, and no start byte: no reply at all, the engine keeps waiting. Half a block: the engine waits, with no timeout on this channel.</li>
+<li>One connection carries all 500. Your numbers will be far below what problem 22 measured against a bare Python server: this engine parses, stores and logs every message. On the machine this lab was written on, one connection managed roughly 175 messages per second.</li>
+</ol>
+</details>
+<h3>Part 2: their sender, your listener (port 6662 to your port 6671)</h3>
+<p>Now the engine is the client. Run your problem 20 server where the engine can reach it:</p>
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="nn">socket</span><span class="o">,</span> <span class="nn">threading</span>
+
+<span class="n">serve</span> <span class="o">=</span> <span class="n">load</span><span class="p">(</span><span class="s2">&quot;20-many-callers&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">serve</span>
+<span class="n">build_ack</span> <span class="o">=</span> <span class="n">load</span><span class="p">(</span><span class="s2">&quot;09-echo-the-control-id&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">build_ack</span>
+
+<span class="n">seen</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">def</span> <span class="nf">handler</span><span class="p">(</span><span class="n">payload</span><span class="p">:</span> <span class="nb">bytes</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bytes</span><span class="p">:</span>
+    <span class="n">seen</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">payload</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">build_ack</span><span class="p">(</span><span class="n">payload</span><span class="o">.</span><span class="n">decode</span><span class="p">())</span><span class="o">.</span><span class="n">encode</span><span class="p">()</span>
+
+<span class="n">listener</span> <span class="o">=</span> <span class="n">socket</span><span class="o">.</span><span class="n">socket</span><span class="p">()</span>
+<span class="n">listener</span><span class="o">.</span><span class="n">setsockopt</span><span class="p">(</span><span class="n">socket</span><span class="o">.</span><span class="n">SOL_SOCKET</span><span class="p">,</span> <span class="n">socket</span><span class="o">.</span><span class="n">SO_REUSEADDR</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">listener</span><span class="o">.</span><span class="n">bind</span><span class="p">((</span><span class="s2">&quot;0.0.0.0&quot;</span><span class="p">,</span> <span class="mi">6671</span><span class="p">))</span>         <span class="c1"># not 127.0.0.1: the engine connects from its container</span>
+<span class="n">listener</span><span class="o">.</span><span class="n">listen</span><span class="p">()</span>
+<span class="n">stop</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Event</span><span class="p">()</span>
+<span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="p">(</span><span class="n">target</span><span class="o">=</span><span class="n">serve</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="p">(</span><span class="n">listener</span><span class="p">,</span> <span class="n">handler</span><span class="p">,</span> <span class="n">stop</span><span class="p">),</span> <span class="n">daemon</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+</code></pre></div></div>
+<p>Send to the relay and watch <code>seen</code>:</p>
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">print</span><span class="p">(</span><span class="n">send</span><span class="p">(</span><span class="s2">&quot;127.0.0.1&quot;</span><span class="p">,</span> <span class="mi">6662</span><span class="p">,</span> <span class="n">adt_a01</span><span class="p">(</span><span class="s2">&quot;LAB10&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">encode</span><span class="p">()))</span>
+</code></pre></div></div>
+<ol>
+<li>Send five messages through one <code>Session</code> to 6662. How many TCP connections did the engine open to your listener?</li>
+<li>Stop your listener (<code>stop.set()</code>, then close <code>listener</code>). Send three messages to 6662. What does the upstream ACK say? Check <code>status</code>. Start the listener again and wait a few seconds.</li>
+<li>Make your handler answer AE (then AR) and send one message. What does the upstream sender get? Is the message retried? Check <code>status</code>.</li>
+<li>Make your handler return an ACK whose MSA-2 is wrong. Same questions.</li>
+<li>Make your handler sleep 6 seconds before answering. How long does the upstream ACK take, what does it say, and how many times does <code>seen</code> receive the same control ID over the next 20 seconds?</li>
+<li>Wrap the slow handler in your problem 19 <code>Deduplicator</code> and repeat step 10. Count how many times the real work runs. Then make the sleep 8 seconds, count again, and explain the difference (problem 23 rule 7 exists for this).</li>
+</ol>
+<details>
+<summary>What you should see</summary>
+<ol>
+<li>Five. This channel's sender opens a new connection per message, so your listener must handle connections that carry exactly one message as well as long-lived ones.</li>
+<li>Each send gets an immediate AA although your listener is down. <code>status</code> shows <code>queued=3</code>. Within about 2 seconds of the listener returning, all three arrive in order. An AA from an engine means "I have it", not "the destination has it".</li>
+<li>The upstream ACK is <code>AE</code> with the text <code>An Error Occurred Processing Message.</code>, for your AE and for your AR alike. Your own MSA-3 text does not travel upstream. The message is delivered once and not retried; <code>status</code> shows <code>error</code> up by one.</li>
+<li>The same as step 8. This channel validates the control ID of the reply, which is what problem 17 rule 3 and problem 18 rule 2 do on your side.</li>
+<li>The upstream ACK arrives after about 5 seconds, the channel's response timeout, and it is an AA: the message was queued. The engine then resends the same message, same control ID, on a new connection roughly every 7 seconds (5 s timeout plus the 2 s retry interval), and each attempt times out again. In the run this was written from, the handler's work ran 4 times in 24 seconds. The message stays at the head of the engine's queue until a listener answers in time, and everything sent meanwhile is acknowledged at once and queued behind it. Run a fast handler for a few seconds to drain the queue before the next step.</li>
+<li>With a 6 second sleep the work runs once per control ID: the first attempt finishes before the retry arrives, so the retry gets the remembered reply at once and the engine is satisfied. With 8 seconds the retry arrives while the first attempt is still running, nothing is remembered yet, and the work runs again. Remembering finished work is not enough when duplicates can overlap.</li>
+</ol>
+</details>
+<h3>Part 3: change the engine</h3>
+<p>The channel definitions are plain XML built in <code>labs/mirth/lab.py</code>. Change a setting there, run <code>lab.py deploy</code> again (it updates the channels in place), and repeat the experiment it affects.</p>
+<ul>
+<li>In <code>tcp_destination</code>, set <code>keepConnectionOpen</code> to <code>true</code>. Repeat step 6.</li>
+<li>In <code>tcp_destination</code>, change <code>destination_properties(queue=True)</code> to <code>queue=False</code>. Repeat step 7. What does the upstream sender get now when your listener is down?</li>
+<li>In <code>tcp_destination</code>, set <code>responseTimeout</code> to <code>1000</code>. Repeat step 10 with a handler that sleeps 2 seconds.</li>
+<li>In <code>source</code>, the relay's response is <code>Auto-generate (Destinations completed)</code> and <code>mellp-in</code> uses <code>Auto-generate (After source transformer)</code>. Swap the relay to the second one and repeat step 8. When is the upstream ACK sent now, and what can it no longer tell the sender?</li>
+</ul>
+<p>For each one, write down what you expected before you ran it.</p>
+<h3>Clean up</h3>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>docker rm -f mellp-engine
+</code></pre></div></div>
+
+<p>The lab files are in <a href="https://github.com/HeyItWorked/mellp/tree/main/labs/mirth"><code>labs/mirth/</code></a>.</p>
+
+<h1 id="replaying-a-day">Replaying a day of traffic safely</h1>
+
+<p>Lecture: <a href="week-6.html#replaying-a-day">Replaying a day of traffic safely</a>.</p>
+
+<h2 id="hl7-practice-15">hl7-practice 15: Reconcile ACKs</h2>
+
+<p><code>Medium</code></p>
+<p><strong>INT-201:</strong> At end of day we need to know which messages the other side received.</p>
+<p><code>reconcile_acks(sent: list[str], acks: list[str]) -&gt; dict[str, str]</code></p>
+<ul>
+<li>Key = <code>MSH-10</code> of each sent message. Value = <code>MSA-1</code> of the ACK whose <code>MSA-2</code> = key.</li>
+<li>No ACK → <code>"MISSING"</code>.</li>
+<li>Same <code>MSH-10</code> sent ≥ 2 times → <code>"DUPLICATE_ID"</code> (regardless of ACKs).</li>
+<li>Several ACKs for the same ID (retries) → the <strong>last</strong> ACK wins.</li>
+<li>ACK pointing to an ID not in <code>sent</code> → key <code>"ORPHAN:&lt;id&gt;"</code>, value = <code>MSA-1</code>.</li>
+</ul>
+
+<p>Write it in <a href="static/files/hl7-practice/p15_reconcile_acks.py"><code>p15_reconcile_acks.py</code></a>, then run <code>python3 test_practice.py p15</code>.</p>
+
+<details>
+<summary>Reference solution</summary>
+<p>It imports <a href="static/files/hl7-practice/solutions/_hl7.py"><code>solutions/_hl7.py</code></a>.</p>
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="nn">collections</span> <span class="kn">import</span> <span class="n">Counter</span>
+
+<span class="kn">from</span> <span class="nn">solutions._hl7</span> <span class="kn">import</span> <span class="n">field</span><span class="p">,</span> <span class="n">first</span>
+
+
+<span class="k">def</span> <span class="nf">reconcile_acks</span><span class="p">(</span><span class="n">sent</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">acks</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+    <span class="n">sent_ids</span> <span class="o">=</span> <span class="p">[</span><span class="n">field</span><span class="p">(</span><span class="n">first</span><span class="p">(</span><span class="n">m</span><span class="p">,</span> <span class="s2">&quot;MSH&quot;</span><span class="p">),</span> <span class="mi">10</span><span class="p">)</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">sent</span><span class="p">]</span>
+    <span class="n">counts</span> <span class="o">=</span> <span class="n">Counter</span><span class="p">(</span><span class="n">sent_ids</span><span class="p">)</span>
+    <span class="n">latest</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">acks</span><span class="p">:</span>
+        <span class="n">msa</span> <span class="o">=</span> <span class="n">first</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="s2">&quot;MSA&quot;</span><span class="p">)</span>
+        <span class="n">latest</span><span class="p">[</span><span class="n">field</span><span class="p">(</span><span class="n">msa</span><span class="p">,</span> <span class="mi">2</span><span class="p">)]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">msa</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>  <span class="c1"># later ACK overwrites earlier one</span>
+
+    <span class="n">result</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">cid</span> <span class="ow">in</span> <span class="n">sent_ids</span><span class="p">:</span>
+        <span class="n">result</span><span class="p">[</span><span class="n">cid</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;DUPLICATE_ID&quot;</span> <span class="k">if</span> <span class="n">counts</span><span class="p">[</span><span class="n">cid</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="k">else</span> <span class="n">latest</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">cid</span><span class="p">,</span> <span class="s2">&quot;MISSING&quot;</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">cid</span><span class="p">,</span> <span class="n">code</span> <span class="ow">in</span> <span class="n">latest</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="k">if</span> <span class="n">cid</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">counts</span><span class="p">:</span>
+            <span class="n">result</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;ORPHAN:</span><span class="si">{</span><span class="n">cid</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">code</span>
+    <span class="k">return</span> <span class="n">result</span>
+</code></pre></div></div>
+</details>
+
+<h2 id="hl7-practice-16">hl7-practice 16: Match results to orders</h2>
+
+<p><code>Medium</code></p>
+<p><strong>INT-203:</strong> A doctor reports "ordered 2 days ago, still no result". Reconcile orders vs results.</p>
+<p><code>match_results(orders: list[str], results: list[str]) -&gt; dict[str, list[str]]</code></p>
+<p>Each message (ORM or ORU) has exactly 1 <code>OBR</code>. Join key = placer order number <code>OBR-2</code>; test code = <code>OBR-4.1</code>.</p>
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th>output key</th>
+<th>contains</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>matched</code></td>
+<td>order has a result with the same test code</td>
+</tr>
+<tr>
+<td><code>code_mismatch</code></td>
+<td>order has a result but <code>OBR-4.1</code> differs</td>
+</tr>
+<tr>
+<td><code>unknown_order</code></td>
+<td>result points to an order that doesn't exist</td>
+</tr>
+<tr>
+<td><code>pending</code></td>
+<td>order has no result yet</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Each list holds placer order numbers, <strong>sorted</strong>.</p>
+
+<p>Write it in <a href="static/files/hl7-practice/p16_match_results.py"><code>p16_match_results.py</code></a>, then run <code>python3 test_practice.py p16</code>.</p>
+
+<details>
+<summary>Reference solution</summary>
+<p>It imports <a href="static/files/hl7-practice/solutions/_hl7.py"><code>solutions/_hl7.py</code></a>.</p>
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="nn">solutions._hl7</span> <span class="kn">import</span> <span class="n">field</span><span class="p">,</span> <span class="n">first</span><span class="p">,</span> <span class="n">part</span>
+
+
+<span class="k">def</span> <span class="nf">_key_and_code</span><span class="p">(</span><span class="n">message</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+    <span class="n">obr</span> <span class="o">=</span> <span class="n">first</span><span class="p">(</span><span class="n">message</span><span class="p">,</span> <span class="s2">&quot;OBR&quot;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">field</span><span class="p">(</span><span class="n">obr</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span> <span class="n">part</span><span class="p">(</span><span class="n">field</span><span class="p">(</span><span class="n">obr</span><span class="p">,</span> <span class="mi">4</span><span class="p">),</span> <span class="s2">&quot;^&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">match_results</span><span class="p">(</span><span class="n">orders</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">results</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
+    <span class="n">ordered</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">_key_and_code</span><span class="p">(</span><span class="n">m</span><span class="p">)</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">orders</span><span class="p">)</span>
+    <span class="n">out</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;matched&quot;</span><span class="p">:</span> <span class="p">[],</span> <span class="s2">&quot;code_mismatch&quot;</span><span class="p">:</span> <span class="p">[],</span> <span class="s2">&quot;unknown_order&quot;</span><span class="p">:</span> <span class="p">[],</span> <span class="s2">&quot;pending&quot;</span><span class="p">:</span> <span class="p">[]}</span>
+    <span class="n">resulted</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">results</span><span class="p">:</span>
+        <span class="n">placer</span><span class="p">,</span> <span class="n">code</span> <span class="o">=</span> <span class="n">_key_and_code</span><span class="p">(</span><span class="n">m</span><span class="p">)</span>
+        <span class="n">resulted</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">placer</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">placer</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">ordered</span><span class="p">:</span>
+            <span class="n">out</span><span class="p">[</span><span class="s2">&quot;unknown_order&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">placer</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">ordered</span><span class="p">[</span><span class="n">placer</span><span class="p">]</span> <span class="o">==</span> <span class="n">code</span><span class="p">:</span>
+            <span class="n">out</span><span class="p">[</span><span class="s2">&quot;matched&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">placer</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">out</span><span class="p">[</span><span class="s2">&quot;code_mismatch&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">placer</span><span class="p">)</span>
+    <span class="n">out</span><span class="p">[</span><span class="s2">&quot;pending&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">p</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">ordered</span> <span class="k">if</span> <span class="n">p</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">resulted</span><span class="p">]</span>
+    <span class="k">return</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">out</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
+</code></pre></div></div>
+</details>
+
+<h2 id="mellp-22">mellp 22: Ten Thousand</h2>
+
+<p><code>Medium</code> · load · throughput · threads · stdlib</p>
+<p>Before an interface goes live, someone asks how many messages per second it can take. A morning admission rush, a backlog replayed after a downtime, or a lab analyser flushing its queue can all send thousands of messages in minutes. The only honest answer is a measurement, and for that you need a load generator that speaks MLLP the way real senders do: a few long-lived connections, one message in flight on each.</p>
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nd">@dataclass</span>
+<span class="k">class</span> <span class="nc">Stats</span><span class="p">:</span>
+    <span class="n">sent</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">acked</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">failed</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">seconds</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="n">per_second</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="n">p50_ms</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="n">p99_ms</span><span class="p">:</span> <span class="nb">float</span>
+
+<span class="k">def</span> <span class="nf">blast</span><span class="p">(</span><span class="n">host</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">port</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">payloads</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">bytes</span><span class="p">],</span> <span class="n">connections</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">4</span><span class="p">,</span> <span class="n">timeout</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">5.0</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Stats</span>
+</code></pre></div></div>
+<ol>
+<li>Open exactly <code>connections</code> TCP connections. They work at the same time, and each stays open for its whole share of the payloads.</li>
+<li>On each connection: send one message, wait for its reply, then send the next. Every payload is sent exactly once, on one of the connections.</li>
+<li><code>acked</code> counts replies whose <code>MSA-1</code> is <code>AA</code>; every other reply counts as <code>failed</code>. <code>sent = acked + failed</code>.</li>
+<li><code>seconds</code> is the wall time of the whole run and <code>per_second = sent / seconds</code>. <code>p50_ms</code> and <code>p99_ms</code> are the 50th and 99th percentiles of per-message latency, measured from just before the send to the complete reply, in milliseconds.</li>
+</ol>
+<p><strong>Example 1:</strong></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Input:   blast(&quot;127.0.0.1&quot;, 2575, ten_thousand_admits, connections=4)     the server answers AA to all
+Output:  Stats(sent=10000, acked=10000, failed=0, seconds=0.57, per_second=17508.5, p50_ms=0.21, p99_ms=0.46)
+Explanation: one run against the tests&#x27; server on a laptop. The timings depend on the machine and on what
+             else it is doing (the same run took 4.4 s while other jobs were busy); the counts do not.
+</code></pre></div></div>
+<p><strong>Example 2:</strong></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Input:   blast(&quot;127.0.0.1&quot;, 2575, two_hundred_admits, connections=4)      every tenth reply is AE
+Output:  Stats(sent=200, acked=180, failed=20, ...)
+</code></pre></div></div>
+<p><strong>Constraints:</strong></p>
+<ul>
+<li>The server always replies, with exactly one block per message and no bytes outside blocks.</li>
+<li><code>1 &lt;= connections &lt;= len(payloads)</code>.</li>
+<li>Every reply has an <code>MSA</code> segment. Payloads never contain <code>0x0B</code> or <code>0x1C</code>.</li>
+<li>Any percentile definition that picks a value from the sorted latencies (nearest rank, for example) is fine. Tests only check <code>0 &lt; p50_ms &lt;= p99_ms</code> and that the unit is milliseconds.</li>
+</ul>
+<p><strong>Follow-up:</strong> with one message in flight per connection, throughput is capped at <code>connections / latency</code>. Some receivers accept several messages before the first ACK comes back. What would that do to the numbers, and what does it cost when one of the messages in flight fails?</p>
+<details>
+<summary>Hint 1</summary>
+<p><code>payloads[i::connections]</code> gives connection <code>i</code> its share. A <code>concurrent.futures.ThreadPoolExecutor(max_workers=connections)</code> runs one worker per connection, and <code>future.result()</code> hands back what each worker collected (and re-raises what it raised).</p>
+</details>
+<details>
+<summary>Hint 2</summary>
+<p><code>time.perf_counter()</code> is the clock for measuring durations. With the latencies sorted, the nearest-rank percentile <code>p</code> is <code>latencies[round(p * (len(latencies) - 1))]</code>. <code>statistics.quantiles(latencies, n=100)</code> is the interpolating alternative.</p>
+</details>
+<h3>Measure it</h3>
+<p>Point <code>blast</code> at your own servers from problems 20 and 21. Save this as <code>measure.py</code> in the repository root and run <code>uv run python measure.py</code>:</p>
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="nn">asyncio</span>
+<span class="kn">import</span> <span class="nn">runpy</span>
+<span class="kn">import</span> <span class="nn">threading</span>
+
+<span class="kn">from</span> <span class="nn">harness.hl7msg</span> <span class="kn">import</span> <span class="n">ack</span><span class="p">,</span> <span class="n">adt_a01</span>
+<span class="kn">from</span> <span class="nn">harness.net</span> <span class="kn">import</span> <span class="n">listener</span><span class="p">,</span> <span class="n">port_of</span>
+
+<span class="n">blast</span> <span class="o">=</span> <span class="n">runpy</span><span class="o">.</span><span class="n">run_path</span><span class="p">(</span><span class="s2">&quot;problems/22-ten-thousand/solution.py&quot;</span><span class="p">)[</span><span class="s2">&quot;blast&quot;</span><span class="p">]</span>
+<span class="n">serve</span> <span class="o">=</span> <span class="n">runpy</span><span class="o">.</span><span class="n">run_path</span><span class="p">(</span><span class="s2">&quot;problems/20-many-callers/solution.py&quot;</span><span class="p">)[</span><span class="s2">&quot;serve&quot;</span><span class="p">]</span>
+<span class="n">start</span> <span class="o">=</span> <span class="n">runpy</span><span class="o">.</span><span class="n">run_path</span><span class="p">(</span><span class="s2">&quot;problems/21-async-listener/solution.py&quot;</span><span class="p">)[</span><span class="s2">&quot;start&quot;</span><span class="p">]</span>
+
+<span class="n">payloads</span> <span class="o">=</span> <span class="p">[</span><span class="n">adt_a01</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;MSG</span><span class="si">{</span><span class="n">n</span><span class="si">:</span><span class="s2">05d</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">encode</span><span class="p">()</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">10_000</span><span class="p">)]</span>
+
+
+<span class="k">def</span> <span class="nf">threaded_server</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Problem 20 on a background thread. Returns its port.&quot;&quot;&quot;</span>
+    <span class="n">sock</span> <span class="o">=</span> <span class="n">listener</span><span class="p">()</span>
+    <span class="n">args</span> <span class="o">=</span> <span class="p">(</span><span class="n">sock</span><span class="p">,</span> <span class="k">lambda</span> <span class="n">payload</span><span class="p">:</span> <span class="n">ack</span><span class="p">(</span><span class="n">payload</span><span class="p">)</span><span class="o">.</span><span class="n">encode</span><span class="p">(),</span> <span class="n">threading</span><span class="o">.</span><span class="n">Event</span><span class="p">())</span>
+    <span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="p">(</span><span class="n">target</span><span class="o">=</span><span class="n">serve</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="n">args</span><span class="p">,</span> <span class="n">daemon</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">port_of</span><span class="p">(</span><span class="n">sock</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">async_server</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Problem 21 on an event loop in a background thread. Returns its port.&quot;&quot;&quot;</span>
+    <span class="n">loop</span> <span class="o">=</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">new_event_loop</span><span class="p">()</span>
+    <span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="p">(</span><span class="n">target</span><span class="o">=</span><span class="n">loop</span><span class="o">.</span><span class="n">run_forever</span><span class="p">,</span> <span class="n">daemon</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+
+    <span class="k">async</span> <span class="k">def</span> <span class="nf">handler</span><span class="p">(</span><span class="n">message</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">message</span><span class="o">.</span><span class="n">create_ack</span><span class="p">()</span>
+
+    <span class="n">server</span> <span class="o">=</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">run_coroutine_threadsafe</span><span class="p">(</span><span class="n">start</span><span class="p">(</span><span class="n">handler</span><span class="p">),</span> <span class="n">loop</span><span class="p">)</span><span class="o">.</span><span class="n">result</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">server</span><span class="o">.</span><span class="n">sockets</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">getsockname</span><span class="p">()[</span><span class="mi">1</span><span class="p">]</span>
+
+
+<span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">port</span> <span class="ow">in</span> <span class="p">[(</span><span class="s2">&quot;problem 20&quot;</span><span class="p">,</span> <span class="n">threaded_server</span><span class="p">()),</span> <span class="p">(</span><span class="s2">&quot;problem 21&quot;</span><span class="p">,</span> <span class="n">async_server</span><span class="p">())]:</span>
+    <span class="k">for</span> <span class="n">connections</span> <span class="ow">in</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">16</span><span class="p">):</span>
+        <span class="n">stats</span> <span class="o">=</span> <span class="n">blast</span><span class="p">(</span><span class="s2">&quot;127.0.0.1&quot;</span><span class="p">,</span> <span class="n">port</span><span class="p">,</span> <span class="n">payloads</span><span class="p">,</span> <span class="n">connections</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">  </span><span class="si">{</span><span class="n">connections</span><span class="si">:</span><span class="s2">&gt;2</span><span class="si">}</span><span class="s2"> connections  </span><span class="si">{</span><span class="n">stats</span><span class="o">.</span><span class="n">per_second</span><span class="si">:</span><span class="s2">7.0f</span><span class="si">}</span><span class="s2"> msg/s&quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;  p50 </span><span class="si">{</span><span class="n">stats</span><span class="o">.</span><span class="n">p50_ms</span><span class="si">:</span><span class="s2">6.2f</span><span class="si">}</span><span class="s2"> ms  p99 </span><span class="si">{</span><span class="n">stats</span><span class="o">.</span><span class="n">p99_ms</span><span class="si">:</span><span class="s2">6.2f</span><span class="si">}</span><span class="s2"> ms&quot;</span>
+        <span class="p">)</span>
+</code></pre></div></div>
+<p>Server and load generator share one Python process here, so both compete for the same interpreter. Moving the server into its own process is a good second experiment.</p>
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th>server</th>
+<th>connections</th>
+<th>msg/s</th>
+<th>p50 ms</th>
+<th>p99 ms</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>problem 20 (threads)</td>
+<td>1</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>problem 20 (threads)</td>
+<td>4</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>problem 20 (threads)</td>
+<td>16</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>problem 21 (asyncio)</td>
+<td>1</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>problem 21 (asyncio)</td>
+<td>4</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>problem 21 (asyncio)</td>
+<td>16</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+</div>
+
+<p>Write it in <a href="https://github.com/HeyItWorked/mellp/tree/main/problems/22-ten-thousand"><code>problems/22-ten-thousand/solution.py</code></a>, then run:</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>uv run pytest problems/22-*
+</code></pre></div></div>
+
+<details>
+<summary>Reference solution</summary>
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="nn">socket</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">from</span> <span class="nn">concurrent.futures</span> <span class="kn">import</span> <span class="n">ThreadPoolExecutor</span>
+<span class="kn">from</span> <span class="nn">dataclasses</span> <span class="kn">import</span> <span class="n">dataclass</span>
+
+<span class="n">SB</span> <span class="o">=</span> <span class="sa">b</span><span class="s2">&quot;</span><span class="se">\x0b</span><span class="s2">&quot;</span>
+<span class="n">EB</span> <span class="o">=</span> <span class="sa">b</span><span class="s2">&quot;</span><span class="se">\x1c\x0d</span><span class="s2">&quot;</span>
+
+
+<span class="nd">@dataclass</span>
+<span class="k">class</span> <span class="nc">Stats</span><span class="p">:</span>
+    <span class="n">sent</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">acked</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">failed</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">seconds</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="n">per_second</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="n">p50_ms</span><span class="p">:</span> <span class="nb">float</span>
+    <span class="n">p99_ms</span><span class="p">:</span> <span class="nb">float</span>
+
+
+<span class="k">def</span> <span class="nf">accepted</span><span class="p">(</span><span class="n">reply</span><span class="p">:</span> <span class="nb">bytes</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="k">for</span> <span class="n">segment</span> <span class="ow">in</span> <span class="n">reply</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="sa">b</span><span class="s2">&quot;</span><span class="se">\r</span><span class="s2">&quot;</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">segment</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="sa">b</span><span class="s2">&quot;MSA|&quot;</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">segment</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="sa">b</span><span class="s2">&quot;|&quot;</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="sa">b</span><span class="s2">&quot;AA&quot;</span>
+    <span class="k">return</span> <span class="kc">False</span>
+
+
+<span class="k">def</span> <span class="nf">run_connection</span><span class="p">(</span><span class="n">host</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">port</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">share</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">bytes</span><span class="p">],</span> <span class="n">timeout</span><span class="p">:</span> <span class="nb">float</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Sends `share` one message at a time over one connection: (latency, accepted) per message.&quot;&quot;&quot;</span>
+    <span class="n">results</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">with</span> <span class="n">socket</span><span class="o">.</span><span class="n">create_connection</span><span class="p">((</span><span class="n">host</span><span class="p">,</span> <span class="n">port</span><span class="p">),</span> <span class="n">timeout</span><span class="o">=</span><span class="n">timeout</span><span class="p">)</span> <span class="k">as</span> <span class="n">sock</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">payload</span> <span class="ow">in</span> <span class="n">share</span><span class="p">:</span>
+            <span class="n">started</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span>
+            <span class="n">sock</span><span class="o">.</span><span class="n">sendall</span><span class="p">(</span><span class="n">SB</span> <span class="o">+</span> <span class="n">payload</span> <span class="o">+</span> <span class="n">EB</span><span class="p">)</span>
+            <span class="n">reply</span> <span class="o">=</span> <span class="sa">b</span><span class="s2">&quot;&quot;</span>  <span class="c1"># one request in flight, so the reply is everything up to its end marker</span>
+            <span class="k">while</span> <span class="ow">not</span> <span class="n">reply</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="n">EB</span><span class="p">):</span>
+                <span class="n">chunk</span> <span class="o">=</span> <span class="n">sock</span><span class="o">.</span><span class="n">recv</span><span class="p">(</span><span class="mi">65536</span><span class="p">)</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">chunk</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">ConnectionError</span><span class="p">(</span><span class="s2">&quot;the server closed the connection&quot;</span><span class="p">)</span>
+                <span class="n">reply</span> <span class="o">+=</span> <span class="n">chunk</span>
+            <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span> <span class="o">-</span> <span class="n">started</span><span class="p">,</span> <span class="n">accepted</span><span class="p">(</span><span class="n">reply</span><span class="p">)))</span>
+    <span class="k">return</span> <span class="n">results</span>
+
+
+<span class="k">def</span> <span class="nf">blast</span><span class="p">(</span>
+    <span class="n">host</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">port</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">payloads</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">bytes</span><span class="p">],</span> <span class="n">connections</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">4</span><span class="p">,</span> <span class="n">timeout</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">5.0</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Stats</span><span class="p">:</span>
+    <span class="n">shares</span> <span class="o">=</span> <span class="p">[</span><span class="n">payloads</span><span class="p">[</span><span class="n">index</span><span class="p">::</span><span class="n">connections</span><span class="p">]</span> <span class="k">for</span> <span class="n">index</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">connections</span><span class="p">)]</span>
+    <span class="n">started</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span>
+    <span class="k">with</span> <span class="n">ThreadPoolExecutor</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="n">connections</span><span class="p">)</span> <span class="k">as</span> <span class="n">pool</span><span class="p">:</span>
+        <span class="n">futures</span> <span class="o">=</span> <span class="p">[</span><span class="n">pool</span><span class="o">.</span><span class="n">submit</span><span class="p">(</span><span class="n">run_connection</span><span class="p">,</span> <span class="n">host</span><span class="p">,</span> <span class="n">port</span><span class="p">,</span> <span class="n">share</span><span class="p">,</span> <span class="n">timeout</span><span class="p">)</span> <span class="k">for</span> <span class="n">share</span> <span class="ow">in</span> <span class="n">shares</span><span class="p">]</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="p">[</span><span class="n">result</span> <span class="k">for</span> <span class="n">future</span> <span class="ow">in</span> <span class="n">futures</span> <span class="k">for</span> <span class="n">result</span> <span class="ow">in</span> <span class="n">future</span><span class="o">.</span><span class="n">result</span><span class="p">()]</span>
+    <span class="n">seconds</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">perf_counter</span><span class="p">()</span> <span class="o">-</span> <span class="n">started</span>
+    <span class="n">latencies</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">latency</span> <span class="o">*</span> <span class="mi">1000</span> <span class="k">for</span> <span class="n">latency</span><span class="p">,</span> <span class="n">_</span> <span class="ow">in</span> <span class="n">results</span><span class="p">)</span>
+    <span class="n">acked</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">ok</span> <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">ok</span> <span class="ow">in</span> <span class="n">results</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">Stats</span><span class="p">(</span>
+        <span class="n">sent</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">results</span><span class="p">),</span>
+        <span class="n">acked</span><span class="o">=</span><span class="n">acked</span><span class="p">,</span>
+        <span class="n">failed</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">results</span><span class="p">)</span> <span class="o">-</span> <span class="n">acked</span><span class="p">,</span>
+        <span class="n">seconds</span><span class="o">=</span><span class="n">seconds</span><span class="p">,</span>
+        <span class="n">per_second</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">results</span><span class="p">)</span> <span class="o">/</span> <span class="n">seconds</span><span class="p">,</span>
+        <span class="n">p50_ms</span><span class="o">=</span><span class="n">latencies</span><span class="p">[</span><span class="nb">round</span><span class="p">(</span><span class="mf">0.50</span> <span class="o">*</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">latencies</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">))],</span>
+        <span class="n">p99_ms</span><span class="o">=</span><span class="n">latencies</span><span class="p">[</span><span class="nb">round</span><span class="p">(</span><span class="mf">0.99</span> <span class="o">*</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">latencies</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">))],</span>
+    <span class="p">)</span>
+</code></pre></div></div>
+</details>
+
+<h2 id="mellp-27">mellp 27: Write It Down</h2>
+
+<p><code>Medium</code> · sqlite · logging · stdlib</p>
+<p>When a nurse says an admit never showed up, the first question is whether it ever reached the engine. Every engine keeps a message log for that: what came in, when, and what happened to it. This one is a single SQLite table, and problems 28 and 31 use the same table.</p>
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">MessageLog</span><span class="p">:</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+    <span class="k">def</span> <span class="nf">record</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">raw</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">direction</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;in&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span>
+    <span class="k">def</span> <span class="nf">set_status</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">row_id</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">status</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">detail</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+    <span class="k">def</span> <span class="nf">get</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">row_id</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span> <span class="o">|</span> <span class="kc">None</span>
+    <span class="k">def</span> <span class="nf">find</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">control_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">message_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">status</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">]</span>
+    <span class="k">def</span> <span class="nf">close</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+</code></pre></div></div>
+<p>The table is fixed. It is in the stub as <code>SCHEMA</code>:</p>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">CREATE</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="k">IF</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">EXISTS</span><span class="w"> </span><span class="n">messages</span><span class="w"> </span><span class="p">(</span>
+<span class="w">    </span><span class="n">id</span><span class="w">           </span><span class="nb">INTEGER</span><span class="w"> </span><span class="k">PRIMARY</span><span class="w"> </span><span class="k">KEY</span><span class="w"> </span><span class="n">AUTOINCREMENT</span><span class="p">,</span>
+<span class="w">    </span><span class="n">received_at</span><span class="w">  </span><span class="nb">TEXT</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="p">,</span>
+<span class="w">    </span><span class="n">direction</span><span class="w">    </span><span class="nb">TEXT</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="p">,</span>
+<span class="w">    </span><span class="n">control_id</span><span class="w">   </span><span class="nb">TEXT</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="p">,</span>
+<span class="w">    </span><span class="n">message_type</span><span class="w"> </span><span class="nb">TEXT</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="p">,</span>
+<span class="w">    </span><span class="n">status</span><span class="w">       </span><span class="nb">TEXT</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="w"> </span><span class="k">DEFAULT</span><span class="w"> </span><span class="s1">&#39;received&#39;</span><span class="p">,</span>
+<span class="w">    </span><span class="n">detail</span><span class="w">       </span><span class="nb">TEXT</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="w"> </span><span class="k">DEFAULT</span><span class="w"> </span><span class="s1">&#39;&#39;</span><span class="p">,</span>
+<span class="w">    </span><span class="n">raw</span><span class="w">          </span><span class="nb">TEXT</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span>
+<span class="p">)</span>
+</code></pre></div></div>
+<ol>
+<li><code>MessageLog(path)</code> opens the SQLite file at <code>path</code>. A new path gets the table created. An existing file keeps its rows.</li>
+<li><code>record</code> inserts one row and returns its id:</li>
+<li><code>raw</code> stored verbatim, <code>\r</code> included;</li>
+<li><code>control_id</code> = MSH-10;</li>
+<li><code>message_type</code> = MSH-9.1 and MSH-9.2 joined by <code>^</code>, like <code>ADT^A01</code> (no MSH-9.3);</li>
+<li><code>received_at</code> = the current UTC time in ISO 8601 with its offset, like <code>2026-01-05T08:30:00.123456+00:00</code>;</li>
+<li><code>direction</code> as given, <code>status</code> = <code>received</code>, <code>detail</code> = empty.</li>
+<li>The same control ID may be recorded more than once. Each call gets its own row.</li>
+<li><code>set_status</code> overwrites <code>status</code> and <code>detail</code> of one row.</li>
+<li>Every write is committed before the method returns. The tests check through a second <code>sqlite3</code> connection while yours is still open.</li>
+<li><code>get</code> returns the row as a dict keyed by column name (all eight columns), or <code>None</code> for an unknown id.</li>
+<li><code>find</code> returns the matching rows as dicts in ascending id. Filters that are given combine with AND. No filters returns every row.</li>
+<li>Values go into SQL as parameters, never by string formatting. A test records a message containing <code>'</code> and <code>;</code>.</li>
+</ol>
+<p><strong>Example 1:</strong></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>log = MessageLog(&quot;engine.db&quot;)
+log.record(adt_a01(&quot;MSG00001&quot;))          -&gt; 1
+log.record(oru_r01(&quot;MSG00002&quot;))          -&gt; 2
+log.set_status(1, &quot;sent&quot;)
+log.get(1)[&quot;status&quot;]                     -&gt; &quot;sent&quot;
+log.get(2)[&quot;message_type&quot;]               -&gt; &quot;ORU^R01&quot;
+log.get(3)                               -&gt; None
+</code></pre></div></div>
+<p><strong>Example 2:</strong></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>log.record(adt_a01(&quot;MSG00001&quot;))          -&gt; 3
+log.find(control_id=&quot;MSG00001&quot;)          -&gt; [row 1, row 3]
+log.find(control_id=&quot;MSG00001&quot;, status=&quot;received&quot;)  -&gt; [row 3]
+log.find()                               -&gt; [row 1, row 2, row 3]
+Explanation: the sender retransmitted MSG00001. Both copies are logged.
+</code></pre></div></div>
+<p><strong>Constraints:</strong></p>
+<ul>
+<li>Messages start with an MSH that has at least 12 fields, default separators (<code>|</code>, <code>^</code>), and an MSH-9 with at least a code and a trigger.</li>
+<li>One <code>MessageLog</code> is used from one thread.</li>
+<li>Tests call <code>close</code> before deleting the file.</li>
+</ul>
+<p><strong>Follow-up:</strong> the log grows by tens of thousands of rows a day. Which index would you add first, and what is your retention rule for rows that contain patient data?</p>
+<details>
+<summary>Hint 1</summary>
+<p><code>sqlite3.connect(path)</code> creates the file if it is missing. Set <code>connection.row_factory = sqlite3.Row</code> and <code>dict(row)</code> gives you column names for free. <code>with connection:</code> commits the block, or rolls it back on an exception. <code>cursor.lastrowid</code> is the new id.</p>
+</details>
+<details>
+<summary>Hint 2</summary>
+<p>Column names cannot be parameters, values can. Build <code>find</code>'s <code>WHERE</code> clause from fixed column names with <code>?</code> placeholders and pass the values separately. For the timestamp: <code>datetime.now(timezone.utc).isoformat()</code>.</p>
+</details>
+
+<p>Write it in <a href="https://github.com/HeyItWorked/mellp/tree/main/problems/27-write-it-down"><code>problems/27-write-it-down/solution.py</code></a>, then run:</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>uv run pytest problems/27-*
+</code></pre></div></div>
+
+<details>
+<summary>Reference solution</summary>
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="nn">sqlite3</span>
+<span class="kn">from</span> <span class="nn">datetime</span> <span class="kn">import</span> <span class="n">datetime</span><span class="p">,</span> <span class="n">timezone</span>
+
+<span class="n">SCHEMA</span> <span class="o">=</span> <span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">CREATE TABLE IF NOT EXISTS messages (</span>
+<span class="s2">    id           INTEGER PRIMARY KEY AUTOINCREMENT,</span>
+<span class="s2">    received_at  TEXT NOT NULL,</span>
+<span class="s2">    direction    TEXT NOT NULL,</span>
+<span class="s2">    control_id   TEXT NOT NULL,</span>
+<span class="s2">    message_type TEXT NOT NULL,</span>
+<span class="s2">    status       TEXT NOT NULL DEFAULT &#39;received&#39;,</span>
+<span class="s2">    detail       TEXT NOT NULL DEFAULT &#39;&#39;,</span>
+<span class="s2">    raw          TEXT NOT NULL</span>
+<span class="s2">)</span>
+<span class="s2">&quot;&quot;&quot;</span>
+
+
+<span class="k">class</span> <span class="nc">MessageLog</span><span class="p">:</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="c1"># Autocommit: each statement is its own transaction, durable when execute() returns.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_db</span> <span class="o">=</span> <span class="n">sqlite3</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">isolation_level</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_db</span><span class="o">.</span><span class="n">row_factory</span> <span class="o">=</span> <span class="n">sqlite3</span><span class="o">.</span><span class="n">Row</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_db</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">SCHEMA</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">record</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">raw</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">direction</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;in&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="n">header</span> <span class="o">=</span> <span class="n">raw</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\r</span><span class="s2">&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;|&quot;</span><span class="p">)</span>  <span class="c1"># MSH-n sits at index n - 1</span>
+        <span class="n">message_type</span> <span class="o">=</span> <span class="s2">&quot;^&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">header</span><span class="p">[</span><span class="mi">8</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;^&quot;</span><span class="p">)[:</span><span class="mi">2</span><span class="p">])</span>
+        <span class="n">received_at</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">(</span><span class="n">timezone</span><span class="o">.</span><span class="n">utc</span><span class="p">)</span><span class="o">.</span><span class="n">isoformat</span><span class="p">()</span>
+        <span class="n">cursor</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_db</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+            <span class="s2">&quot;INSERT INTO messages (received_at, direction, control_id, message_type, raw)&quot;</span>
+            <span class="s2">&quot; VALUES (?, ?, ?, ?, ?)&quot;</span><span class="p">,</span>
+            <span class="p">(</span><span class="n">received_at</span><span class="p">,</span> <span class="n">direction</span><span class="p">,</span> <span class="n">header</span><span class="p">[</span><span class="mi">9</span><span class="p">],</span> <span class="n">message_type</span><span class="p">,</span> <span class="n">raw</span><span class="p">),</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">cursor</span><span class="o">.</span><span class="n">lastrowid</span>
+
+    <span class="k">def</span> <span class="nf">set_status</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">row_id</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">status</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">detail</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_db</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+            <span class="s2">&quot;UPDATE messages SET status = ?, detail = ? WHERE id = ?&quot;</span><span class="p">,</span> <span class="p">(</span><span class="n">status</span><span class="p">,</span> <span class="n">detail</span><span class="p">,</span> <span class="n">row_id</span><span class="p">)</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">get</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">row_id</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">row</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_db</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="s2">&quot;SELECT * FROM messages WHERE id = ?&quot;</span><span class="p">,</span> <span class="p">(</span><span class="n">row_id</span><span class="p">,))</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()</span>
+        <span class="k">return</span> <span class="kc">None</span> <span class="k">if</span> <span class="n">row</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="nb">dict</span><span class="p">(</span><span class="n">row</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">find</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">control_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">message_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">status</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">]:</span>
+        <span class="n">filters</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;control_id&quot;</span><span class="p">:</span> <span class="n">control_id</span><span class="p">,</span> <span class="s2">&quot;message_type&quot;</span><span class="p">:</span> <span class="n">message_type</span><span class="p">,</span> <span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="n">status</span><span class="p">}</span>
+        <span class="n">conditions</span> <span class="o">=</span> <span class="p">[</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">column</span><span class="si">}</span><span class="s2"> = ?&quot;</span> <span class="k">for</span> <span class="n">column</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">filters</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">]</span>
+        <span class="n">values</span> <span class="o">=</span> <span class="p">[</span><span class="n">value</span> <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">filters</span><span class="o">.</span><span class="n">values</span><span class="p">()</span> <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">]</span>
+        <span class="n">where</span> <span class="o">=</span> <span class="s2">&quot; WHERE &quot;</span> <span class="o">+</span> <span class="s2">&quot; AND &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">conditions</span><span class="p">)</span> <span class="k">if</span> <span class="n">conditions</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span>
+        <span class="n">rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_db</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;SELECT * FROM messages</span><span class="si">{</span><span class="n">where</span><span class="si">}</span><span class="s2"> ORDER BY id&quot;</span><span class="p">,</span> <span class="n">values</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">[</span><span class="nb">dict</span><span class="p">(</span><span class="n">row</span><span class="p">)</span> <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">rows</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">close</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_db</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+</code></pre></div></div>
+</details>
+
+<h2 id="mellp-28">mellp 28: Play It Again</h2>
+
+<p><code>Medium</code> · sqlite · replay · stdlib</p>
+<p>The lab system was down from 02:00 to 02:40 and every result sent in that window was rejected. Once it is back, someone has to resend exactly those messages, in their original order, and know afterwards which ones made it. That is a replay, and it runs against the message log from problem 27.</p>
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">replay</span><span class="p">(</span>
+    <span class="n">path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">send</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="nb">bytes</span><span class="p">],</span> <span class="nb">bytes</span><span class="p">],</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">message_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">status</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">since_id</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+    <span class="n">stop_on_error</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span>
+</code></pre></div></div>
+<p><code>path</code> is an SQLite file with the problem 27 table:</p>
+<div class="language-sql highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">CREATE</span><span class="w"> </span><span class="k">TABLE</span><span class="w"> </span><span class="k">IF</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">EXISTS</span><span class="w"> </span><span class="n">messages</span><span class="w"> </span><span class="p">(</span>
+<span class="w">    </span><span class="n">id</span><span class="w">           </span><span class="nb">INTEGER</span><span class="w"> </span><span class="k">PRIMARY</span><span class="w"> </span><span class="k">KEY</span><span class="w"> </span><span class="n">AUTOINCREMENT</span><span class="p">,</span>
+<span class="w">    </span><span class="n">received_at</span><span class="w">  </span><span class="nb">TEXT</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="p">,</span>
+<span class="w">    </span><span class="n">direction</span><span class="w">    </span><span class="nb">TEXT</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="p">,</span>
+<span class="w">    </span><span class="n">control_id</span><span class="w">   </span><span class="nb">TEXT</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="p">,</span>
+<span class="w">    </span><span class="n">message_type</span><span class="w"> </span><span class="nb">TEXT</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="p">,</span>
+<span class="w">    </span><span class="n">status</span><span class="w">       </span><span class="nb">TEXT</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="w"> </span><span class="k">DEFAULT</span><span class="w"> </span><span class="s1">&#39;received&#39;</span><span class="p">,</span>
+<span class="w">    </span><span class="n">detail</span><span class="w">       </span><span class="nb">TEXT</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="w"> </span><span class="k">DEFAULT</span><span class="w"> </span><span class="s1">&#39;&#39;</span><span class="p">,</span>
+<span class="w">    </span><span class="n">raw</span><span class="w">          </span><span class="nb">TEXT</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span>
+<span class="p">)</span>
+</code></pre></div></div>
+<ol>
+<li>Select the rows with <code>direction = 'in'</code> and <code>id &gt; since_id</code>, narrowed by <code>message_type</code> and <code>status</code> when those are given. Process them in ascending id.</li>
+<li>For each row call <code>reply = send(raw.encode())</code>. The bytes must be exactly what was logged.</li>
+<li>Read MSA-1 and MSA-3 from the reply. MSA-1 <code>AA</code>: set the row's status to <code>replayed</code>. Any other code: status <code>failed</code>. In both cases <code>detail</code> becomes MSA-3 (empty when the reply has none).</li>
+<li>If <code>send</code> raises <code>TimeoutError</code> or <code>ConnectionError</code> (subclasses included), the row gets status <code>failed</code> and <code>detail</code> = the exception's class name, such as <code>ConnectionRefusedError</code>. The replay goes on with the next row.</li>
+<li>Each row's new status is committed before the next message is sent. If the process dies mid-replay, every row already answered keeps its new status on disk.</li>
+<li>With <code>stop_on_error=True</code>, stop right after the first failed row. Later rows are not sent and not changed.</li>
+<li>Return <code>{"sent": &lt;rows attempted&gt;, "acked": &lt;AA count&gt;, "failed": [&lt;failed row ids in order&gt;]}</code>.</li>
+</ol>
+<p><strong>Example 1:</strong></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>rows:   1 in  ADT^A01 received
+        2 out ACK^A01 received
+        3 in  ORU^R01 received
+        4 in  ADT^A08 failed
+replay(path, send)                          # send answers AA to everything
+Output: {&quot;sent&quot;: 3, &quot;acked&quot;: 3, &quot;failed&quot;: []}
+Explanation: row 2 is outbound and is skipped. Rows 1, 3 and 4 are now replayed.
+</code></pre></div></div>
+<p><strong>Example 2:</strong></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Same rows. send answers AE &quot;lab busy&quot; to the ORU.
+replay(path, send, status=&quot;received&quot;, stop_on_error=True)
+Output: {&quot;sent&quot;: 2, &quot;acked&quot;: 1, &quot;failed&quot;: [3]}
+Explanation: row 1 replayed, row 3 failed with detail &quot;lab busy&quot;, row 4 was never selected.
+</code></pre></div></div>
+<p><strong>Constraints:</strong></p>
+<ul>
+<li><code>raw</code> columns hold UTF-8 text. Every reply <code>send</code> returns contains an MSA segment.</li>
+<li>Exceptions other than <code>TimeoutError</code> and <code>ConnectionError</code> propagate out of <code>replay</code>.</li>
+<li>Nothing else writes to the file during a replay.</li>
+</ul>
+<p><strong>Follow-up:</strong> a replay resends the original control IDs. A receiver that deduplicates (problem 19) answers AA without processing them. When is that what you want, and when does it make the replay useless?</p>
+<details>
+<summary>Hint 1</summary>
+<p><code>sqlite3.connect(path, isolation_level=None)</code> puts the connection in autocommit mode: each statement is committed as it runs. Otherwise call <code>connection.commit()</code> after each <code>UPDATE</code>.</p>
+</details>
+<details>
+<summary>Hint 2</summary>
+<p>Optional filters can stay in one query: <code>(:status IS NULL OR status = :status)</code> with a dict of named parameters.</p>
+</details>
+
+<p>Write it in <a href="https://github.com/HeyItWorked/mellp/tree/main/problems/28-play-it-again"><code>problems/28-play-it-again/solution.py</code></a>, then run:</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>uv run pytest problems/28-*
+</code></pre></div></div>
+
+<details>
+<summary>Reference solution</summary>
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="nn">sqlite3</span>
+<span class="kn">from</span> <span class="nn">collections.abc</span> <span class="kn">import</span> <span class="n">Callable</span>
+<span class="kn">from</span> <span class="nn">contextlib</span> <span class="kn">import</span> <span class="n">closing</span>
+
+
+<span class="k">def</span> <span class="nf">replay</span><span class="p">(</span>
+    <span class="n">path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">send</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="nb">bytes</span><span class="p">],</span> <span class="nb">bytes</span><span class="p">],</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">message_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">status</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">since_id</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+    <span class="n">stop_on_error</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+    <span class="c1"># Autocommit: each UPDATE is durable before the next message goes out.</span>
+    <span class="k">with</span> <span class="n">closing</span><span class="p">(</span><span class="n">sqlite3</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">isolation_level</span><span class="o">=</span><span class="kc">None</span><span class="p">))</span> <span class="k">as</span> <span class="n">db</span><span class="p">:</span>
+        <span class="n">rows</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+            <span class="s2">&quot;SELECT id, raw FROM messages WHERE direction = &#39;in&#39; AND id &gt; :since_id&quot;</span>
+            <span class="s2">&quot; AND (:message_type IS NULL OR message_type = :message_type)&quot;</span>
+            <span class="s2">&quot; AND (:status IS NULL OR status = :status) ORDER BY id&quot;</span><span class="p">,</span>
+            <span class="p">{</span><span class="s2">&quot;since_id&quot;</span><span class="p">:</span> <span class="n">since_id</span><span class="p">,</span> <span class="s2">&quot;message_type&quot;</span><span class="p">:</span> <span class="n">message_type</span><span class="p">,</span> <span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="n">status</span><span class="p">},</span>
+        <span class="p">)</span><span class="o">.</span><span class="n">fetchall</span><span class="p">()</span>
+        <span class="n">failed</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">sent</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">row_id</span><span class="p">,</span> <span class="n">raw</span> <span class="ow">in</span> <span class="n">rows</span><span class="p">:</span>
+            <span class="n">sent</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">code</span><span class="p">,</span> <span class="n">detail</span> <span class="o">=</span> <span class="n">acknowledgment</span><span class="p">(</span><span class="n">send</span><span class="p">(</span><span class="n">raw</span><span class="o">.</span><span class="n">encode</span><span class="p">()))</span>
+            <span class="k">except</span> <span class="p">(</span><span class="ne">TimeoutError</span><span class="p">,</span> <span class="ne">ConnectionError</span><span class="p">)</span> <span class="k">as</span> <span class="n">error</span><span class="p">:</span>
+                <span class="n">code</span><span class="p">,</span> <span class="n">detail</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="nb">type</span><span class="p">(</span><span class="n">error</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span>
+            <span class="n">new_status</span> <span class="o">=</span> <span class="s2">&quot;replayed&quot;</span> <span class="k">if</span> <span class="n">code</span> <span class="o">==</span> <span class="s2">&quot;AA&quot;</span> <span class="k">else</span> <span class="s2">&quot;failed&quot;</span>
+            <span class="n">db</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+                <span class="s2">&quot;UPDATE messages SET status = ?, detail = ? WHERE id = ?&quot;</span><span class="p">,</span> <span class="p">(</span><span class="n">new_status</span><span class="p">,</span> <span class="n">detail</span><span class="p">,</span> <span class="n">row_id</span><span class="p">)</span>
+            <span class="p">)</span>
+            <span class="k">if</span> <span class="n">new_status</span> <span class="o">==</span> <span class="s2">&quot;failed&quot;</span><span class="p">:</span>
+                <span class="n">failed</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">row_id</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">stop_on_error</span><span class="p">:</span>
+                    <span class="k">break</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;sent&quot;</span><span class="p">:</span> <span class="n">sent</span><span class="p">,</span> <span class="s2">&quot;acked&quot;</span><span class="p">:</span> <span class="n">sent</span> <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="n">failed</span><span class="p">),</span> <span class="s2">&quot;failed&quot;</span><span class="p">:</span> <span class="n">failed</span><span class="p">}</span>
+
+
+<span class="k">def</span> <span class="nf">acknowledgment</span><span class="p">(</span><span class="n">reply</span><span class="p">:</span> <span class="nb">bytes</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;MSA-1 and MSA-3 of a reply.&quot;&quot;&quot;</span>
+    <span class="k">for</span> <span class="n">segment</span> <span class="ow">in</span> <span class="n">reply</span><span class="o">.</span><span class="n">decode</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\r</span><span class="s2">&quot;</span><span class="p">):</span>
+        <span class="n">fields</span> <span class="o">=</span> <span class="n">segment</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;|&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">fields</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;MSA&quot;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">fields</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">fields</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">fields</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">3</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span>
+    <span class="k">return</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span>
+</code></pre></div></div>
+</details>
+
+<h1 id="when-the-bridge-goes-down">When the bridge goes down</h1>
+
+<p>Lecture: <a href="week-6.html#when-the-bridge-goes-down">When the bridge goes down</a>.</p>
+
+<h2 id="mellp-29">mellp 29: Dead Letters</h2>
+
+<p><code>Medium</code> · dead-letter queue · retries · stdlib</p>
+<p>Some messages will never be accepted: an order for a patient the lab has never heard of, a result with a code the chart does not know. Retrying them forever blocks everything queued behind them. The usual answer is a dead-letter queue: give up on the message, keep it with the reason, move on, and let a person resend it once the cause is fixed.</p>
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nd">@dataclass</span>
+<span class="k">class</span> <span class="nc">DeadLetter</span><span class="p">:</span>
+    <span class="n">payload</span><span class="p">:</span> <span class="nb">bytes</span>
+    <span class="n">reason</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">attempts</span><span class="p">:</span> <span class="nb">int</span>
+
+<span class="k">class</span> <span class="nc">Outbox</span><span class="p">:</span>
+    <span class="n">dead</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">DeadLetter</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">send</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="nb">bytes</span><span class="p">],</span> <span class="nb">bytes</span><span class="p">],</span> <span class="n">max_attempts</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">3</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+    <span class="k">def</span> <span class="nf">submit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">payload</span><span class="p">:</span> <span class="nb">bytes</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span>
+    <span class="k">def</span> <span class="nf">redrive</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span>
+</code></pre></div></div>
+<p><code>send(payload)</code> delivers one message and returns the reply payload, or raises. <code>DeadLetter</code> is defined in the stub.</p>
+<ol>
+<li><code>submit</code> returns <code>True</code> as soon as a reply with MSA-1 <code>AA</code> arrives.</li>
+<li>MSA-1 <code>AR</code>: the message is dead at once, reason <code>AR: &lt;MSA-3&gt;</code>. It is not retried.</li>
+<li>MSA-1 <code>AE</code>, or <code>send</code> raising <code>TimeoutError</code> or <code>ConnectionError</code> (subclasses included): try again, at most <code>max_attempts</code> attempts in total. When they run out the message is dead, reason <code>AE: &lt;MSA-3&gt;</code> or the exception's class name (<code>TimeoutError</code>, <code>ConnectionRefusedError</code>, ...). Retry immediately, no sleeping.</li>
+<li>A dead message goes on the end of <code>dead</code> as a <code>DeadLetter</code> with the payload, the reason from its last attempt, and the number of attempts made. <code>submit</code> returns <code>False</code> for it, and later submits work as usual: one poison message never blocks the queue.</li>
+<li><code>redrive</code> gives every dead letter a fresh round of up to <code>max_attempts</code> attempts, following rules 1 to 3. Delivered letters leave <code>dead</code>. The rest stay in their original order, with <code>attempts</code> added up over all rounds and <code>reason</code> from the latest attempt. It returns how many were delivered.</li>
+</ol>
+<p><strong>Example 1:</strong></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>outbox = Outbox(send, max_attempts=3)
+outbox.submit(adt)       -&gt; True       # send answered AE, then AA: 2 attempts
+outbox.submit(order)     -&gt; False      # send answered AR &quot;unknown patient&quot;
+outbox.submit(result)    -&gt; True
+outbox.dead              -&gt; [DeadLetter(order, &quot;AR: unknown patient&quot;, 1)]
+</code></pre></div></div>
+<p><strong>Example 2:</strong></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>outbox = Outbox(send, max_attempts=2)
+outbox.submit(adt)       -&gt; False      # TimeoutError, TimeoutError
+outbox.dead              -&gt; [DeadLetter(adt, &quot;TimeoutError&quot;, 2)]
+outbox.redrive()         -&gt; 0          # AE &quot;busy&quot;, AE &quot;busy&quot;
+outbox.dead              -&gt; [DeadLetter(adt, &quot;AE: busy&quot;, 4)]
+outbox.redrive()         -&gt; 1          # AA
+outbox.dead              -&gt; []
+</code></pre></div></div>
+<p><strong>Constraints:</strong></p>
+<ul>
+<li>Every reply contains an MSA segment whose MSA-1 is <code>AA</code>, <code>AE</code> or <code>AR</code>. MSA-3 may be missing, which gives a reason like <code>AE:</code>.</li>
+<li>Exceptions other than <code>TimeoutError</code> and <code>ConnectionError</code> propagate.</li>
+<li><code>max_attempts &gt;= 1</code>. One thread uses the outbox.</li>
+</ul>
+<p><strong>Follow-up:</strong> this dead-letter queue lives in memory and is gone after a restart. Problem 30 makes it durable. Before that: who gets told when a message lands in <code>dead</code>, and how?</p>
+<details>
+<summary>Hint 1</summary>
+<p>Write one helper that runs a round of up to <code>max_attempts</code> attempts for a single <code>DeadLetter</code>, adding to its <code>attempts</code> and setting its <code>reason</code> as it goes, and returns whether it was delivered. <code>submit</code> and <code>redrive</code> both use it.</p>
+</details>
+<details>
+<summary>Hint 2</summary>
+<p>MSA by hand: split the reply on <code>\r</code>, find the segment whose first field is <code>MSA</code>, split it on <code>|</code>. MSA-1 is index 1, MSA-3 is index 3 when it exists.</p>
+</details>
+
+<p>Write it in <a href="https://github.com/HeyItWorked/mellp/tree/main/problems/29-dead-letters"><code>problems/29-dead-letters/solution.py</code></a>, then run:</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>uv run pytest problems/29-*
+</code></pre></div></div>
+
+<details>
+<summary>Reference solution</summary>
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="nn">collections.abc</span> <span class="kn">import</span> <span class="n">Callable</span>
+<span class="kn">from</span> <span class="nn">dataclasses</span> <span class="kn">import</span> <span class="n">dataclass</span>
+
+
+<span class="nd">@dataclass</span>
+<span class="k">class</span> <span class="nc">DeadLetter</span><span class="p">:</span>
+    <span class="n">payload</span><span class="p">:</span> <span class="nb">bytes</span>
+    <span class="n">reason</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">attempts</span><span class="p">:</span> <span class="nb">int</span>
+
+
+<span class="k">class</span> <span class="nc">Outbox</span><span class="p">:</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">send</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="nb">bytes</span><span class="p">],</span> <span class="nb">bytes</span><span class="p">],</span> <span class="n">max_attempts</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">3</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">send</span> <span class="o">=</span> <span class="n">send</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">max_attempts</span> <span class="o">=</span> <span class="n">max_attempts</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dead</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">DeadLetter</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="k">def</span> <span class="nf">submit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">payload</span><span class="p">:</span> <span class="nb">bytes</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="n">letter</span> <span class="o">=</span> <span class="n">DeadLetter</span><span class="p">(</span><span class="n">payload</span><span class="p">,</span> <span class="n">reason</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">attempts</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_deliver</span><span class="p">(</span><span class="n">letter</span><span class="p">):</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dead</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">letter</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">False</span>
+
+    <span class="k">def</span> <span class="nf">redrive</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="n">waiting</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dead</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dead</span><span class="p">,</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">letter</span> <span class="ow">in</span> <span class="n">waiting</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_deliver</span><span class="p">(</span><span class="n">letter</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">dead</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">letter</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="n">waiting</span><span class="p">)</span> <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">dead</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_deliver</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">letter</span><span class="p">:</span> <span class="n">DeadLetter</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;One round of up to max_attempts. On failure `letter` holds the last reason.&quot;&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">max_attempts</span><span class="p">):</span>
+            <span class="n">letter</span><span class="o">.</span><span class="n">attempts</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">code</span><span class="p">,</span> <span class="n">text</span> <span class="o">=</span> <span class="n">acknowledgment</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">send</span><span class="p">(</span><span class="n">letter</span><span class="o">.</span><span class="n">payload</span><span class="p">))</span>
+            <span class="k">except</span> <span class="p">(</span><span class="ne">TimeoutError</span><span class="p">,</span> <span class="ne">ConnectionError</span><span class="p">)</span> <span class="k">as</span> <span class="n">error</span><span class="p">:</span>
+                <span class="n">letter</span><span class="o">.</span><span class="n">reason</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">error</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span>
+                <span class="k">continue</span>
+            <span class="k">if</span> <span class="n">code</span> <span class="o">==</span> <span class="s2">&quot;AA&quot;</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">True</span>
+            <span class="n">letter</span><span class="o">.</span><span class="n">reason</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">code</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">text</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="k">if</span> <span class="n">code</span> <span class="o">==</span> <span class="s2">&quot;AR&quot;</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">return</span> <span class="kc">False</span>
+
+
+<span class="k">def</span> <span class="nf">acknowledgment</span><span class="p">(</span><span class="n">reply</span><span class="p">:</span> <span class="nb">bytes</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;MSA-1 and MSA-3 of a reply.&quot;&quot;&quot;</span>
+    <span class="k">for</span> <span class="n">segment</span> <span class="ow">in</span> <span class="n">reply</span><span class="o">.</span><span class="n">decode</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\r</span><span class="s2">&quot;</span><span class="p">):</span>
+        <span class="n">fields</span> <span class="o">=</span> <span class="n">segment</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;|&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">fields</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;MSA&quot;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">fields</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">fields</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">fields</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">3</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span>
+    <span class="k">return</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span>
+</code></pre></div></div>
+</details>
+
+<h2 id="mellp-30">mellp 30: Store and Forward</h2>
+
+<p><code>Hard</code> · sqlite · queue · ordering · crash recovery · stdlib</p>
+<p>An engine accepts a message from upstream, ACKs it, and only then delivers it downstream. Between those two moments the message lives in a queue, and that queue has to survive a crash, a restart and a downstream system that is down for an hour. Order matters as well: an A08 update overtaking the A01 admit it belongs to creates a patient the receiver does not expect. Build a durable outbound queue on SQLite. The table design is yours.</p>
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">Spool</span><span class="p">:</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+    <span class="k">def</span> <span class="nf">enqueue</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">destination</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">payload</span><span class="p">:</span> <span class="nb">bytes</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span>
+    <span class="k">def</span> <span class="nf">pump</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">senders</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Callable</span><span class="p">[[</span><span class="nb">bytes</span><span class="p">],</span> <span class="nb">bytes</span><span class="p">]],</span> <span class="n">max_attempts</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">3</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span>
+    <span class="k">def</span> <span class="nf">pending</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">destination</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span>
+    <span class="k">def</span> <span class="nf">dead</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span>
+    <span class="k">def</span> <span class="nf">redrive</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message_id</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+</code></pre></div></div>
+<ol>
+<li><code>enqueue</code> stores the message as pending and returns its id. Ids ascend in enqueue order. The message is committed before <code>enqueue</code> returns.</li>
+<li><code>pump</code> makes one pass. For each destination in <code>senders</code>, it sends that destination's pending messages one at a time, strictly in id order, with <code>senders[destination](payload)</code>, which returns the reply payload or raises. It returns the number of messages delivered in this pass.</li>
+<li>MSA-1 <code>AA</code>: delivered, it is never sent again. MSA-1 <code>AR</code>: dead at once with reason <code>AR: &lt;MSA-3&gt;</code>, and the pass goes on with the destination's next message.</li>
+<li>MSA-1 <code>AE</code>, or the sender raising <code>TimeoutError</code> or <code>ConnectionError</code> (subclasses included): the message's attempt count goes up by one.</li>
+<li>If the count has reached <code>max_attempts</code>, the message is dead with reason <code>AE: &lt;MSA-3&gt;</code> or the exception's class name, and the pass goes on with the destination's next message.</li>
+<li>Otherwise the message stays pending and the pass stops for this destination, so nothing overtakes it. The next <code>pump</code> starts with it. Other destinations are not affected.</li>
+<li>Messages for a destination that is not in <code>senders</code> stay pending, untouched.</li>
+<li>Everything is on disk as it happens. A new <code>Spool(path)</code> on the same file sees the same pending ids, attempt counts and dead letters.</li>
+<li>If anything else is raised while a message is being sent (tests raise a <code>BaseException</code> subclass to simulate the process dying), it propagates out of <code>pump</code> and that message is still pending with its attempt count unchanged. Messages delivered earlier in the pass stay delivered. Delivery is at-least-once: the interrupted message is sent again by a later pass.</li>
+<li><code>pending(destination)</code> lists pending ids in ascending order; <code>pending()</code> lists them for every destination. <code>dead()</code> lists <code>(id, reason)</code> in ascending id.</li>
+<li><code>redrive(id)</code> makes a dead message pending again with its attempt count back at 0. It takes its original place in the order, because order is by id. On an id that is not dead it does nothing.</li>
+</ol>
+<p><strong>Example 1:</strong></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>spool = Spool(&quot;spool.db&quot;)
+spool.enqueue(&quot;lab&quot;, a)          -&gt; 1
+spool.enqueue(&quot;lab&quot;, b)          -&gt; 2
+spool.enqueue(&quot;chart&quot;, c)        -&gt; 3
+spool.pump({&quot;lab&quot;: lab, &quot;chart&quot;: chart})   -&gt; 1
+Explanation: lab answered AE to message 1, so message 2 waits behind it. chart took message 3.
+spool.pending()                  -&gt; [1, 2]
+spool.pump({&quot;lab&quot;: lab, &quot;chart&quot;: chart})   -&gt; 2
+spool.pending()                  -&gt; []
+</code></pre></div></div>
+<p><strong>Example 2:</strong></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>spool.enqueue(&quot;lab&quot;, order)      -&gt; 4
+spool.enqueue(&quot;lab&quot;, result)     -&gt; 5
+spool.pump({&quot;lab&quot;: lab})         -&gt; 1     # AR &quot;unknown patient&quot; for 4, AA for 5
+spool.dead()                     -&gt; [(4, &quot;AR: unknown patient&quot;)]
+spool.redrive(4)
+spool.pending(&quot;lab&quot;)             -&gt; [4]
+</code></pre></div></div>
+<p><strong>Example 3:</strong></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>spool.enqueue(&quot;lab&quot;, a)          -&gt; 6
+spool.pump({&quot;lab&quot;: crashing})    # the process dies while 6 is in flight
+Spool(&quot;spool.db&quot;).pending()      -&gt; [6]
+</code></pre></div></div>
+<p><strong>Constraints:</strong></p>
+<ul>
+<li>Every reply contains an MSA segment whose MSA-1 is <code>AA</code>, <code>AE</code> or <code>AR</code>.</li>
+<li>One thread uses a <code>Spool</code>. Several <code>Spool</code> objects may be open on the same file one after another, never at the same time inside a <code>pump</code>.</li>
+<li><code>max_attempts &gt;= 1</code>. Payloads are arbitrary bytes.</li>
+</ul>
+<p><strong>Follow-up:</strong> at-least-once means the receiver may see message 6 twice. What in the message lets it notice, and what would you have to add to make the whole path exactly-once?</p>
+<details>
+<summary>Hint 1</summary>
+<p>One table with a state column (<code>pending</code>, <code>delivered</code>, <code>dead</code>), an attempt count and a reason is enough. <code>BLOB</code> columns take and return <code>bytes</code>. <code>sqlite3.connect(path, isolation_level=None)</code> commits each statement as it runs.</p>
+</details>
+<details>
+<summary>Hint 2</summary>
+<p>Write the outcome of an attempt only after <code>send</code> has returned or raised one of the expected errors. Then a crash in the middle leaves nothing half-written, and there is nothing to recover on startup.</p>
+</details>
+
+<p>Write it in <a href="https://github.com/HeyItWorked/mellp/tree/main/problems/30-store-and-forward"><code>problems/30-store-and-forward/solution.py</code></a>, then run:</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>uv run pytest problems/30-*
+</code></pre></div></div>
+
+<details>
+<summary>Reference solution</summary>
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="nn">sqlite3</span>
+<span class="kn">from</span> <span class="nn">collections.abc</span> <span class="kn">import</span> <span class="n">Callable</span>
+
+<span class="n">SCHEMA</span> <span class="o">=</span> <span class="s2">&quot;&quot;&quot;</span>
+<span class="s2">CREATE TABLE IF NOT EXISTS spool (</span>
+<span class="s2">    id          INTEGER PRIMARY KEY AUTOINCREMENT,</span>
+<span class="s2">    destination TEXT NOT NULL,</span>
+<span class="s2">    payload     BLOB NOT NULL,</span>
+<span class="s2">    state       TEXT NOT NULL DEFAULT &#39;pending&#39;,</span>
+<span class="s2">    attempts    INTEGER NOT NULL DEFAULT 0,</span>
+<span class="s2">    reason      TEXT NOT NULL DEFAULT &#39;&#39;</span>
+<span class="s2">)</span>
+<span class="s2">&quot;&quot;&quot;</span>
+
+
+<span class="k">class</span> <span class="nc">Spool</span><span class="p">:</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="c1"># Autocommit: every state change is on disk before the next message is sent.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_db</span> <span class="o">=</span> <span class="n">sqlite3</span><span class="o">.</span><span class="n">connect</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">isolation_level</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_db</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span><span class="n">SCHEMA</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">enqueue</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">destination</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">payload</span><span class="p">:</span> <span class="nb">bytes</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="n">cursor</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_db</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+            <span class="s2">&quot;INSERT INTO spool (destination, payload) VALUES (?, ?)&quot;</span><span class="p">,</span> <span class="p">(</span><span class="n">destination</span><span class="p">,</span> <span class="n">payload</span><span class="p">)</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">cursor</span><span class="o">.</span><span class="n">lastrowid</span>
+
+    <span class="k">def</span> <span class="nf">pump</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">senders</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Callable</span><span class="p">[[</span><span class="nb">bytes</span><span class="p">],</span> <span class="nb">bytes</span><span class="p">]],</span> <span class="n">max_attempts</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">3</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="n">delivered</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">destination</span><span class="p">,</span> <span class="n">send</span> <span class="ow">in</span> <span class="n">senders</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">for</span> <span class="n">message_id</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">pending</span><span class="p">(</span><span class="n">destination</span><span class="p">):</span>
+                <span class="n">outcome</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_attempt</span><span class="p">(</span><span class="n">message_id</span><span class="p">,</span> <span class="n">send</span><span class="p">,</span> <span class="n">max_attempts</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">outcome</span> <span class="o">==</span> <span class="s2">&quot;delivered&quot;</span><span class="p">:</span>
+                    <span class="n">delivered</span> <span class="o">+=</span> <span class="mi">1</span>
+                <span class="k">elif</span> <span class="n">outcome</span> <span class="o">==</span> <span class="s2">&quot;retry&quot;</span><span class="p">:</span>
+                    <span class="k">break</span>  <span class="c1"># nothing for this destination may overtake the stuck message</span>
+        <span class="k">return</span> <span class="n">delivered</span>
+
+    <span class="k">def</span> <span class="nf">_attempt</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message_id</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">send</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="nb">bytes</span><span class="p">],</span> <span class="nb">bytes</span><span class="p">],</span> <span class="n">max_attempts</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Sends one message and records the outcome: &#39;delivered&#39;, &#39;dead&#39; or &#39;retry&#39;.&quot;&quot;&quot;</span>
+        <span class="n">payload</span><span class="p">,</span> <span class="n">attempts</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_db</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+            <span class="s2">&quot;SELECT payload, attempts FROM spool WHERE id = ?&quot;</span><span class="p">,</span> <span class="p">(</span><span class="n">message_id</span><span class="p">,)</span>
+        <span class="p">)</span><span class="o">.</span><span class="n">fetchone</span><span class="p">()</span>
+        <span class="c1"># A crash inside send() leaves the row exactly as it was: still pending.</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">code</span><span class="p">,</span> <span class="n">text</span> <span class="o">=</span> <span class="n">acknowledgment</span><span class="p">(</span><span class="n">send</span><span class="p">(</span><span class="n">payload</span><span class="p">))</span>
+            <span class="n">reason</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">code</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">text</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="k">except</span> <span class="p">(</span><span class="ne">TimeoutError</span><span class="p">,</span> <span class="ne">ConnectionError</span><span class="p">)</span> <span class="k">as</span> <span class="n">error</span><span class="p">:</span>
+            <span class="n">code</span><span class="p">,</span> <span class="n">reason</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="nb">type</span><span class="p">(</span><span class="n">error</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span>
+        <span class="n">attempts</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="k">if</span> <span class="n">code</span> <span class="o">==</span> <span class="s2">&quot;AA&quot;</span><span class="p">:</span>
+            <span class="n">outcome</span><span class="p">,</span> <span class="n">state</span><span class="p">,</span> <span class="n">reason</span> <span class="o">=</span> <span class="s2">&quot;delivered&quot;</span><span class="p">,</span> <span class="s2">&quot;delivered&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span>
+        <span class="k">elif</span> <span class="n">code</span> <span class="o">==</span> <span class="s2">&quot;AR&quot;</span> <span class="ow">or</span> <span class="n">attempts</span> <span class="o">&gt;=</span> <span class="n">max_attempts</span><span class="p">:</span>
+            <span class="n">outcome</span><span class="p">,</span> <span class="n">state</span> <span class="o">=</span> <span class="s2">&quot;dead&quot;</span><span class="p">,</span> <span class="s2">&quot;dead&quot;</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">outcome</span><span class="p">,</span> <span class="n">state</span> <span class="o">=</span> <span class="s2">&quot;retry&quot;</span><span class="p">,</span> <span class="s2">&quot;pending&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_db</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+            <span class="s2">&quot;UPDATE spool SET state = ?, attempts = ?, reason = ? WHERE id = ?&quot;</span><span class="p">,</span>
+            <span class="p">(</span><span class="n">state</span><span class="p">,</span> <span class="n">attempts</span><span class="p">,</span> <span class="n">reason</span><span class="p">,</span> <span class="n">message_id</span><span class="p">),</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">outcome</span>
+
+    <span class="k">def</span> <span class="nf">pending</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">destination</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]:</span>
+        <span class="n">rows</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_db</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+            <span class="s2">&quot;SELECT id FROM spool WHERE state = &#39;pending&#39;&quot;</span>
+            <span class="s2">&quot; AND (:destination IS NULL OR destination = :destination) ORDER BY id&quot;</span><span class="p">,</span>
+            <span class="p">{</span><span class="s2">&quot;destination&quot;</span><span class="p">:</span> <span class="n">destination</span><span class="p">},</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">message_id</span> <span class="k">for</span> <span class="p">(</span><span class="n">message_id</span><span class="p">,)</span> <span class="ow">in</span> <span class="n">rows</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">dead</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_db</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+            <span class="s2">&quot;SELECT id, reason FROM spool WHERE state = &#39;dead&#39; ORDER BY id&quot;</span>
+        <span class="p">)</span><span class="o">.</span><span class="n">fetchall</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">redrive</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message_id</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_db</span><span class="o">.</span><span class="n">execute</span><span class="p">(</span>
+            <span class="s2">&quot;UPDATE spool SET state = &#39;pending&#39;, attempts = 0, reason = &#39;&#39;&quot;</span>
+            <span class="s2">&quot; WHERE id = ? AND state = &#39;dead&#39;&quot;</span><span class="p">,</span>
+            <span class="p">(</span><span class="n">message_id</span><span class="p">,),</span>
+        <span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">acknowledgment</span><span class="p">(</span><span class="n">reply</span><span class="p">:</span> <span class="nb">bytes</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;MSA-1 and MSA-3 of a reply.&quot;&quot;&quot;</span>
+    <span class="k">for</span> <span class="n">segment</span> <span class="ow">in</span> <span class="n">reply</span><span class="o">.</span><span class="n">decode</span><span class="p">()</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\r</span><span class="s2">&quot;</span><span class="p">):</span>
+        <span class="n">fields</span> <span class="o">=</span> <span class="n">segment</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;|&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">fields</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;MSA&quot;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">fields</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">fields</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">fields</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">3</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span>
+    <span class="k">return</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span>
+</code></pre></div></div>
+</details>
+
+<p class="small">mellp statements and solutions are copied from mellp at commit <code>5d8e459</code>.</p>
+
+<hr>
+
+<div class="small center">
+<p>Course content © 2026 HeyItWorked. All rights reserved.</p>
+<p>Site design adapted from <a href="https://missing.csail.mit.edu/">The Missing Semester of Your CS Education</a> under <a href="https://creativecommons.org/licenses/by-nc-sa/4.0">CC BY-NC-SA 4.0</a>. See <a href="copyright.html">copyright and license</a>.</p>
+</div>
+
+    </div>
+
+  </body>
+
+</html>

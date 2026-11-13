@@ -6,6 +6,7 @@ th { border-bottom: 2px solid #24008c; }
 td:first-child { font-weight: bold; }
 td code { font-size: 10pt; }
 svg.arch { display: block; width: 100%; height: auto; margin-bottom: 1rem; }
+details { margin-bottom: 1rem; }
 
 @media (prefers-color-scheme: dark) {
   th, td { border-bottom-color: #555; }

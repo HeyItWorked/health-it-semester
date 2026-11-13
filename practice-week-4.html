@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+  <meta charset="utf-8">
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Two test-driven problem sets for weeks 3 to 6 of the Health IT Semester.">
+
+  <title>Week 4 practice &middot; Health IT Semester</title>
+
+  <link rel="stylesheet" href="static/css/main.css">
+  <link rel="stylesheet" href="static/css/syntax.css">
+  <link rel="stylesheet" href="static/css/health-it.css">
+  <script defer src="static/js/sidenotes.js"></script>
+</head>
+
+
+  <body>
+
+    <div id="nav-bg">
+  <nav id="top-nav">
+    <a href="index.html" id="logo">./health-it-semester</a>
+    <input type="checkbox" id="menu-icon">
+    <label class="menu-label" for="menu-icon"></label>
+    <div class="trigger">
+      <div class="trigger-child">
+        <span class="nav-link"><a href="weeks.html">weeks</a></span>
+        <span class="nav-link"><a href="reference.html">reference</a></span>
+        <span class="nav-link"><a href="about.html">about</a></span>
+      </div>
+    </div>
+  </nav>
+</div>
+
+
+    <div id="content">
+
+<h1 class="title">Week 4 practice</h1>
+<h2 class="subtitle">FHIR APIs · 2 exercises</h2>
+
+<p>The full text of every practice problem that fits <a href="week-4.html">week 4</a>, grouped by lecture section. Set up the two sets first: the commands are on the <a href="practice.html#the-two-sets">practice problems</a> page. Each reference solution is collapsed under its exercise; run the tests before you open it.</p>
+
+<ul>
+  <li><a href="#the-bridges-output">The week 3 bridge's output</a>: <a href="#hl7-practice-18">hl7-practice 18</a>, <a href="#mellp-34">mellp 34</a></li>
+</ul>
+
+<h1 id="the-bridges-output">The week 3 bridge's output</h1>
+
+<p>Lecture: <a href="week-4.html#the-bridges-output">The week 3 bridge's output</a>.</p>
+
+<h2 id="hl7-practice-18">hl7-practice 18: ORU → FHIR (lite)</h2>
+
+<p><code>Hard</code></p>
+<p><strong>INT-302:</strong> A new downstream only accepts FHIR. Convert ORU into Patient + Observations.</p>
+<p><code>oru_to_fhir(message: str) -&gt; dict</code> → <code>{"patient": {...}, "observations": [...]}</code></p>
+<p><strong>Patient</strong> (from PID):
+| key | from |
+|---|---|
+| <code>resourceType</code> | <code>"Patient"</code> |
+| <code>identifier</code> | each <code>PID-3</code> repeat → <code>{"system": PID-3.4, "value": PID-3.1}</code> |
+| <code>name</code> | <code>[{"family": PID-5.1.1, "given": [PID-5.2, PID-5.3 if present]}]</code> |
+| <code>birthDate</code> | first 8 chars of <code>PID-7</code> → <code>YYYY</code>, <code>YYYY-MM</code>, or <code>YYYY-MM-DD</code>; empty → <strong>omit the key</strong> |
+| <code>gender</code> | <code>M</code>→<code>male</code>, <code>F</code>→<code>female</code>, <code>O</code>→<code>other</code>, anything else→<code>unknown</code> |</p>
+<p><strong>Observation</strong> (one per OBX, in order):
+| key | from |
+|---|---|
+| <code>resourceType</code> | <code>"Observation"</code> |
+| <code>status</code> | <code>OBX-11</code>: <code>F</code>→<code>final</code>, <code>P</code>→<code>preliminary</code>, <code>C</code>→<code>corrected</code>, <code>X</code>→<code>cancelled</code>, anything else→<code>unknown</code> |
+| <code>subject</code> | <code>{"reference": "Patient/&lt;PID-3.1 of the first repeat&gt;"}</code> |
+| <code>code</code> | <code>{"coding": [{"system": ..., "code": OBX-3.1, "display": OBX-3.2}]}</code>; system = <code>http://loinc.org</code> if <code>OBX-3.3</code> = <code>LN</code>, otherwise keep <code>OBX-3.3</code> as-is |
+| <code>valueQuantity</code> | if <code>OBX-2</code> = <code>NM</code>: <code>{"value": float(OBX-5), "unit": OBX-6.1}</code> (unit may be <code>mmol/L^mmol/L^UCUM</code>) |
+| <code>valueString</code> | if <code>OBX-2</code> is not <code>NM</code>: <code>OBX-5</code> |
+| <code>interpretation</code> | if <code>OBX-8</code> is not empty: <code>[{"coding": [{"code": OBX-8}]}]</code>; empty → <strong>omit the key</strong> |</p>
+
+<p>Write it in <a href="static/files/hl7-practice/p18_oru_to_fhir.py"><code>p18_oru_to_fhir.py</code></a>, then run <code>python3 test_practice.py p18</code>.</p>
+
+<details>
+<summary>Reference solution</summary>
+<p>It imports <a href="static/files/hl7-practice/solutions/_hl7.py"><code>solutions/_hl7.py</code></a>.</p>
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="nn">solutions._hl7</span> <span class="kn">import</span> <span class="n">all_of</span><span class="p">,</span> <span class="n">field</span><span class="p">,</span> <span class="n">first</span><span class="p">,</span> <span class="n">part</span>
+
+<span class="n">GENDER</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;M&quot;</span><span class="p">:</span> <span class="s2">&quot;male&quot;</span><span class="p">,</span> <span class="s2">&quot;F&quot;</span><span class="p">:</span> <span class="s2">&quot;female&quot;</span><span class="p">,</span> <span class="s2">&quot;O&quot;</span><span class="p">:</span> <span class="s2">&quot;other&quot;</span><span class="p">}</span>
+<span class="n">STATUS</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;F&quot;</span><span class="p">:</span> <span class="s2">&quot;final&quot;</span><span class="p">,</span> <span class="s2">&quot;P&quot;</span><span class="p">:</span> <span class="s2">&quot;preliminary&quot;</span><span class="p">,</span> <span class="s2">&quot;C&quot;</span><span class="p">:</span> <span class="s2">&quot;corrected&quot;</span><span class="p">,</span> <span class="s2">&quot;X&quot;</span><span class="p">:</span> <span class="s2">&quot;cancelled&quot;</span><span class="p">}</span>
+
+
+<span class="k">def</span> <span class="nf">_patient</span><span class="p">(</span><span class="n">pid</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+    <span class="n">identifiers</span> <span class="o">=</span> <span class="p">[{</span><span class="s2">&quot;system&quot;</span><span class="p">:</span> <span class="n">part</span><span class="p">(</span><span class="n">r</span><span class="p">,</span> <span class="s2">&quot;^&quot;</span><span class="p">,</span> <span class="mi">4</span><span class="p">),</span> <span class="s2">&quot;value&quot;</span><span class="p">:</span> <span class="n">part</span><span class="p">(</span><span class="n">r</span><span class="p">,</span> <span class="s2">&quot;^&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)}</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">field</span><span class="p">(</span><span class="n">pid</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;~&quot;</span><span class="p">)]</span>
+    <span class="n">name</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">pid</span><span class="p">,</span> <span class="mi">5</span><span class="p">)</span>
+    <span class="n">given</span> <span class="o">=</span> <span class="p">[</span><span class="n">g</span> <span class="k">for</span> <span class="n">g</span> <span class="ow">in</span> <span class="p">(</span><span class="n">part</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="s2">&quot;^&quot;</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span> <span class="n">part</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="s2">&quot;^&quot;</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span> <span class="k">if</span> <span class="n">g</span><span class="p">]</span>
+    <span class="n">patient</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;resourceType&quot;</span><span class="p">:</span> <span class="s2">&quot;Patient&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;identifier&quot;</span><span class="p">:</span> <span class="n">identifiers</span><span class="p">,</span>
+        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="p">[{</span><span class="s2">&quot;family&quot;</span><span class="p">:</span> <span class="n">part</span><span class="p">(</span><span class="n">part</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="s2">&quot;^&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="s2">&quot;&amp;&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="s2">&quot;given&quot;</span><span class="p">:</span> <span class="n">given</span><span class="p">}],</span>
+    <span class="p">}</span>
+    <span class="n">dob</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">pid</span><span class="p">,</span> <span class="mi">7</span><span class="p">)[:</span><span class="mi">8</span><span class="p">]</span>
+    <span class="k">if</span> <span class="n">dob</span><span class="p">:</span>
+        <span class="n">patient</span><span class="p">[</span><span class="s2">&quot;birthDate&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;-&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">p</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="p">(</span><span class="n">dob</span><span class="p">[:</span><span class="mi">4</span><span class="p">],</span> <span class="n">dob</span><span class="p">[</span><span class="mi">4</span><span class="p">:</span><span class="mi">6</span><span class="p">],</span> <span class="n">dob</span><span class="p">[</span><span class="mi">6</span><span class="p">:</span><span class="mi">8</span><span class="p">])</span> <span class="k">if</span> <span class="n">p</span><span class="p">)</span>
+    <span class="n">patient</span><span class="p">[</span><span class="s2">&quot;gender&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">GENDER</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">field</span><span class="p">(</span><span class="n">pid</span><span class="p">,</span> <span class="mi">8</span><span class="p">),</span> <span class="s2">&quot;unknown&quot;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">patient</span>
+
+
+<span class="k">def</span> <span class="nf">_observation</span><span class="p">(</span><span class="n">obx</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">patient_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+    <span class="n">code</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">obx</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+    <span class="n">system</span> <span class="o">=</span> <span class="n">part</span><span class="p">(</span><span class="n">code</span><span class="p">,</span> <span class="s2">&quot;^&quot;</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+    <span class="n">obs</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;resourceType&quot;</span><span class="p">:</span> <span class="s2">&quot;Observation&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="n">STATUS</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">field</span><span class="p">(</span><span class="n">obx</span><span class="p">,</span> <span class="mi">11</span><span class="p">),</span> <span class="s2">&quot;unknown&quot;</span><span class="p">),</span>
+        <span class="s2">&quot;subject&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;reference&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;Patient/</span><span class="si">{</span><span class="n">patient_id</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">},</span>
+        <span class="s2">&quot;code&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;coding&quot;</span><span class="p">:</span> <span class="p">[{</span><span class="s2">&quot;system&quot;</span><span class="p">:</span> <span class="s2">&quot;http://loinc.org&quot;</span> <span class="k">if</span> <span class="n">system</span> <span class="o">==</span> <span class="s2">&quot;LN&quot;</span> <span class="k">else</span> <span class="n">system</span><span class="p">,</span>
+                             <span class="s2">&quot;code&quot;</span><span class="p">:</span> <span class="n">part</span><span class="p">(</span><span class="n">code</span><span class="p">,</span> <span class="s2">&quot;^&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="s2">&quot;display&quot;</span><span class="p">:</span> <span class="n">part</span><span class="p">(</span><span class="n">code</span><span class="p">,</span> <span class="s2">&quot;^&quot;</span><span class="p">,</span> <span class="mi">2</span><span class="p">)}]},</span>
+    <span class="p">}</span>
+    <span class="k">if</span> <span class="n">field</span><span class="p">(</span><span class="n">obx</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;NM&quot;</span><span class="p">:</span>
+        <span class="n">obs</span><span class="p">[</span><span class="s2">&quot;valueQuantity&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;value&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">field</span><span class="p">(</span><span class="n">obx</span><span class="p">,</span> <span class="mi">5</span><span class="p">)),</span> <span class="s2">&quot;unit&quot;</span><span class="p">:</span> <span class="n">part</span><span class="p">(</span><span class="n">field</span><span class="p">(</span><span class="n">obx</span><span class="p">,</span> <span class="mi">6</span><span class="p">),</span> <span class="s2">&quot;^&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)}</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">obs</span><span class="p">[</span><span class="s2">&quot;valueString&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">obx</span><span class="p">,</span> <span class="mi">5</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">field</span><span class="p">(</span><span class="n">obx</span><span class="p">,</span> <span class="mi">8</span><span class="p">):</span>
+        <span class="n">obs</span><span class="p">[</span><span class="s2">&quot;interpretation&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[{</span><span class="s2">&quot;coding&quot;</span><span class="p">:</span> <span class="p">[{</span><span class="s2">&quot;code&quot;</span><span class="p">:</span> <span class="n">field</span><span class="p">(</span><span class="n">obx</span><span class="p">,</span> <span class="mi">8</span><span class="p">)}]}]</span>
+    <span class="k">return</span> <span class="n">obs</span>
+
+
+<span class="k">def</span> <span class="nf">oru_to_fhir</span><span class="p">(</span><span class="n">message</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+    <span class="n">patient</span> <span class="o">=</span> <span class="n">_patient</span><span class="p">(</span><span class="n">first</span><span class="p">(</span><span class="n">message</span><span class="p">,</span> <span class="s2">&quot;PID&quot;</span><span class="p">))</span>
+    <span class="n">patient_id</span> <span class="o">=</span> <span class="n">patient</span><span class="p">[</span><span class="s2">&quot;identifier&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="s2">&quot;value&quot;</span><span class="p">]</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;patient&quot;</span><span class="p">:</span> <span class="n">patient</span><span class="p">,</span> <span class="s2">&quot;observations&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">_observation</span><span class="p">(</span><span class="n">o</span><span class="p">,</span> <span class="n">patient_id</span><span class="p">)</span> <span class="k">for</span> <span class="n">o</span> <span class="ow">in</span> <span class="n">all_of</span><span class="p">(</span><span class="n">message</span><span class="p">,</span> <span class="s2">&quot;OBX&quot;</span><span class="p">)]}</span>
+</code></pre></div></div>
+</details>
+
+<h2 id="mellp-34">mellp 34: Results Bundle</h2>
+
+<p><code>Medium</code> · fhir · bundle · observation · python-hl7</p>
+<p>One ORU^R01 carries a patient and a handful of results. In FHIR that is several resources that must land together, so the usual answer is a transaction Bundle: one POST, all or nothing. Inside the bundle the resources do not have server IDs yet, so they point at each other with temporary <code>urn:uuid:</code> addresses that the server rewrites when it stores them.</p>
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">STATUSES</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;F&quot;</span><span class="p">:</span> <span class="s2">&quot;final&quot;</span><span class="p">,</span> <span class="s2">&quot;P&quot;</span><span class="p">:</span> <span class="s2">&quot;preliminary&quot;</span><span class="p">,</span> <span class="s2">&quot;C&quot;</span><span class="p">:</span> <span class="s2">&quot;corrected&quot;</span><span class="p">}</span>
+
+<span class="k">def</span> <span class="nf">to_bundle</span><span class="p">(</span><span class="n">raw</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span>
+</code></pre></div></div>
+<p>Return <code>{"resourceType": "Bundle", "type": "transaction", "entry": [...]}</code>. Raise <code>ValueError</code> when MSH-9 is not <code>ORU^R01</code>.</p>
+<ol>
+<li><strong>The patient comes first.</strong></li>
+<li><code>fullUrl</code>: <code>"urn:uuid:"</code> + a fresh <code>uuid.uuid4()</code></li>
+<li><code>resource</code>: <code>{"resourceType": "Patient", "identifier": [{"value": PID-3.1}], "name": [{"family": PID-5.1, "given": [PID-5.2]}]}</code></li>
+<li><code>request</code>: <code>{"method": "POST", "url": "Patient", "ifNoneExist": "identifier=&lt;PID-3.1&gt;"}</code>. This is a conditional create: the server only creates the patient if no patient with that identifier exists.</li>
+<li><strong>Then one entry per OBX, in message order.</strong></li>
+<li><code>fullUrl</code>: its own fresh <code>urn:uuid:</code></li>
+<li><code>request</code>: <code>{"method": "POST", "url": "Observation"}</code></li>
+<li><code>resource</code>:<ul>
+<li><code>resourceType</code>: <code>"Observation"</code></li>
+<li><code>status</code>: from OBX-11 through <code>STATUSES</code>, anything else <code>"unknown"</code></li>
+<li><code>code</code>: <code>{"coding": [{"code": OBX-3.1, "display": OBX-3.2, "system": "http://loinc.org"}]}</code>, with <code>system</code> only when OBX-3.3 is <code>LN</code></li>
+<li><code>subject</code>: <code>{"reference": &lt;the patient entry's fullUrl&gt;}</code></li>
+<li><code>effectiveDateTime</code>: the date part of OBR-7 as <code>YYYY-MM-DD</code></li>
+<li>OBX-2 <code>NM</code>: <code>valueQuantity</code> = <code>{"value": float(OBX-5), "unit": OBX-6.1}</code>, with no <code>unit</code> key when OBX-6 is empty. Any other OBX-2: <code>valueString</code> = OBX-5.</li>
+</ul>
+</li>
+<li><strong>No empty values anywhere</strong>, as in problem 33: no <code>""</code>, <code>[]</code>, <code>{}</code> or <code>None</code>. The number <code>0.0</code> is a value.</li>
+</ol>
+<p>Why only the date: a FHIR <code>dateTime</code> that has a time must also carry a timezone offset. An HL7 v2 timestamp without an offset is in the sender's local time, which this message does not tell you, so a date is the most this mapping can state truthfully.</p>
+<p><strong>Example 1:</strong></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>bundle = to_bundle(oru_r01())    # PID 12345 DOE^JANE, OBR-7 20260105074500, three OBX
+
+bundle[&quot;entry&quot;][0][&quot;request&quot;]
+    -&gt; {&quot;method&quot;: &quot;POST&quot;, &quot;url&quot;: &quot;Patient&quot;, &quot;ifNoneExist&quot;: &quot;identifier=12345&quot;}
+
+bundle[&quot;entry&quot;][1][&quot;resource&quot;]
+    -&gt; {&quot;resourceType&quot;: &quot;Observation&quot;,
+        &quot;status&quot;: &quot;final&quot;,
+        &quot;code&quot;: {&quot;coding&quot;: [{&quot;system&quot;: &quot;http://loinc.org&quot;, &quot;code&quot;: &quot;2345-7&quot;, &quot;display&quot;: &quot;Glucose&quot;}]},
+        &quot;subject&quot;: {&quot;reference&quot;: &quot;urn:uuid:5f0c...&quot;},     # entry 0&#x27;s fullUrl
+        &quot;effectiveDateTime&quot;: &quot;2026-01-05&quot;,
+        &quot;valueQuantity&quot;: {&quot;value&quot;: 182.0, &quot;unit&quot;: &quot;mg/dL&quot;}}
+</code></pre></div></div>
+<p><strong>Example 2:</strong></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Input:  &quot;...OBX|3|ST|5778-6^Color of Urine^LN||YELLOW||||||F\r&quot;
+Output: the third observation has &quot;valueString&quot;: &quot;YELLOW&quot; and no valueQuantity.
+</code></pre></div></div>
+<p><strong>Example 3:</strong></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Input:  an ADT^A01
+Output: ValueError
+</code></pre></div></div>
+<p><strong>Constraints:</strong></p>
+<ul>
+<li>One PID and one OBR, before the OBX segments. Zero or more OBX.</li>
+<li>PID-3.1, PID-5.1 and PID-5.2 are never empty. OBX-3 always has three components and OBX-3.1, OBX-3.2 are never empty.</li>
+<li>Each OBX has fields up to OBX-11. OBX-5 is never empty, and is a number when OBX-2 is <code>NM</code>.</li>
+<li>OBR-7 starts with <code>YYYYMMDD</code>.</li>
+<li>Every <code>urn:uuid:</code> is unique, also across calls. Key order does not matter.</li>
+</ul>
+<p><strong>Follow-up:</strong> you want to send the full time after all. Where should the offset come from, and what should happen when the clocks change and a local time occurs twice?</p>
+<details>
+<summary>Hint 1</summary>
+<p><code>[line.split("|") for line in raw.split("\r") if line]</code> gives every segment as a list where index n is field n (for MSH, index n is MSH-(n+1)). With python-hl7 the same reads are <code>msg["OBX.F3.R1.C1"]</code> style keys, and <code>msg.segments("OBX")</code> raises <code>KeyError</code> when there is none.</p>
+</details>
+<details>
+<summary>Hint 2</summary>
+<p>Generate the patient's <code>fullUrl</code> before building any observation; every observation needs it.</p>
+</details>
+
+<p>Write it in <a href="https://github.com/HeyItWorked/mellp/tree/main/problems/34-results-bundle"><code>problems/34-results-bundle/solution.py</code></a>, then run:</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>uv run pytest problems/34-*
+</code></pre></div></div>
+
+<details>
+<summary>Reference solution</summary>
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="nn">uuid</span>
+
+<span class="n">STATUSES</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;F&quot;</span><span class="p">:</span> <span class="s2">&quot;final&quot;</span><span class="p">,</span> <span class="s2">&quot;P&quot;</span><span class="p">:</span> <span class="s2">&quot;preliminary&quot;</span><span class="p">,</span> <span class="s2">&quot;C&quot;</span><span class="p">:</span> <span class="s2">&quot;corrected&quot;</span><span class="p">}</span>
+
+
+<span class="k">def</span> <span class="nf">entry</span><span class="p">(</span><span class="n">resource</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+    <span class="n">request</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;method&quot;</span><span class="p">:</span> <span class="s2">&quot;POST&quot;</span><span class="p">,</span> <span class="s2">&quot;url&quot;</span><span class="p">:</span> <span class="n">resource</span><span class="p">[</span><span class="s2">&quot;resourceType&quot;</span><span class="p">]}</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;fullUrl&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;urn:uuid:</span><span class="si">{</span><span class="n">uuid</span><span class="o">.</span><span class="n">uuid4</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="s2">&quot;resource&quot;</span><span class="p">:</span> <span class="n">resource</span><span class="p">,</span> <span class="s2">&quot;request&quot;</span><span class="p">:</span> <span class="n">request</span><span class="p">}</span>
+
+
+<span class="k">def</span> <span class="nf">to_observation</span><span class="p">(</span><span class="n">obx</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">subject</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">effective</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+    <span class="n">code</span><span class="p">,</span> <span class="n">display</span><span class="p">,</span> <span class="n">coding_system</span> <span class="o">=</span> <span class="n">obx</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;^&quot;</span><span class="p">)[:</span><span class="mi">3</span><span class="p">]</span>
+    <span class="n">coding</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;code&quot;</span><span class="p">:</span> <span class="n">code</span><span class="p">,</span> <span class="s2">&quot;display&quot;</span><span class="p">:</span> <span class="n">display</span><span class="p">}</span>
+    <span class="k">if</span> <span class="n">coding_system</span> <span class="o">==</span> <span class="s2">&quot;LN&quot;</span><span class="p">:</span>
+        <span class="n">coding</span><span class="p">[</span><span class="s2">&quot;system&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;http://loinc.org&quot;</span>
+    <span class="n">observation</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s2">&quot;resourceType&quot;</span><span class="p">:</span> <span class="s2">&quot;Observation&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;status&quot;</span><span class="p">:</span> <span class="n">STATUSES</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">obx</span><span class="p">[</span><span class="mi">11</span><span class="p">],</span> <span class="s2">&quot;unknown&quot;</span><span class="p">),</span>
+        <span class="s2">&quot;code&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;coding&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">coding</span><span class="p">]},</span>
+        <span class="s2">&quot;subject&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;reference&quot;</span><span class="p">:</span> <span class="n">subject</span><span class="p">},</span>
+        <span class="s2">&quot;effectiveDateTime&quot;</span><span class="p">:</span> <span class="n">effective</span><span class="p">,</span>
+    <span class="p">}</span>
+    <span class="k">if</span> <span class="n">obx</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;NM&quot;</span><span class="p">:</span>
+        <span class="n">quantity</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;value&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">obx</span><span class="p">[</span><span class="mi">5</span><span class="p">])}</span>
+        <span class="k">if</span> <span class="n">obx</span><span class="p">[</span><span class="mi">6</span><span class="p">]:</span>
+            <span class="n">quantity</span><span class="p">[</span><span class="s2">&quot;unit&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">obx</span><span class="p">[</span><span class="mi">6</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;^&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">observation</span><span class="p">[</span><span class="s2">&quot;valueQuantity&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">quantity</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">observation</span><span class="p">[</span><span class="s2">&quot;valueString&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">obx</span><span class="p">[</span><span class="mi">5</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">observation</span>
+
+
+<span class="k">def</span> <span class="nf">to_bundle</span><span class="p">(</span><span class="n">raw</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+    <span class="n">segments</span> <span class="o">=</span> <span class="p">[</span><span class="n">line</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;|&quot;</span><span class="p">)</span> <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">raw</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\r</span><span class="s2">&quot;</span><span class="p">)</span> <span class="k">if</span> <span class="n">line</span><span class="p">]</span>
+    <span class="k">if</span> <span class="n">segments</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">8</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;^&quot;</span><span class="p">)[:</span><span class="mi">2</span><span class="p">]</span> <span class="o">!=</span> <span class="p">[</span><span class="s2">&quot;ORU&quot;</span><span class="p">,</span> <span class="s2">&quot;R01&quot;</span><span class="p">]:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;not an ORU^R01: </span><span class="si">{</span><span class="n">segments</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">8</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="n">pid</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="n">segment</span> <span class="k">for</span> <span class="n">segment</span> <span class="ow">in</span> <span class="n">segments</span> <span class="k">if</span> <span class="n">segment</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;PID&quot;</span><span class="p">)</span>
+    <span class="n">obr</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="n">segment</span> <span class="k">for</span> <span class="n">segment</span> <span class="ow">in</span> <span class="n">segments</span> <span class="k">if</span> <span class="n">segment</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;OBR&quot;</span><span class="p">)</span>
+    <span class="n">mrn</span> <span class="o">=</span> <span class="n">pid</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;^&quot;</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">family</span><span class="p">,</span> <span class="n">given</span> <span class="o">=</span> <span class="n">pid</span><span class="p">[</span><span class="mi">5</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;^&quot;</span><span class="p">)[:</span><span class="mi">2</span><span class="p">]</span>
+    <span class="n">name</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;family&quot;</span><span class="p">:</span> <span class="n">family</span><span class="p">,</span> <span class="s2">&quot;given&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">given</span><span class="p">]}</span>
+    <span class="n">patient</span> <span class="o">=</span> <span class="n">entry</span><span class="p">({</span><span class="s2">&quot;resourceType&quot;</span><span class="p">:</span> <span class="s2">&quot;Patient&quot;</span><span class="p">,</span> <span class="s2">&quot;identifier&quot;</span><span class="p">:</span> <span class="p">[{</span><span class="s2">&quot;value&quot;</span><span class="p">:</span> <span class="n">mrn</span><span class="p">}],</span> <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">name</span><span class="p">]})</span>
+    <span class="n">patient</span><span class="p">[</span><span class="s2">&quot;request&quot;</span><span class="p">][</span><span class="s2">&quot;ifNoneExist&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;identifier=</span><span class="si">{</span><span class="n">mrn</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="n">effective</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">obr</span><span class="p">[</span><span class="mi">7</span><span class="p">][</span><span class="mi">0</span><span class="p">:</span><span class="mi">4</span><span class="p">]</span><span class="si">}</span><span class="s2">-</span><span class="si">{</span><span class="n">obr</span><span class="p">[</span><span class="mi">7</span><span class="p">][</span><span class="mi">4</span><span class="p">:</span><span class="mi">6</span><span class="p">]</span><span class="si">}</span><span class="s2">-</span><span class="si">{</span><span class="n">obr</span><span class="p">[</span><span class="mi">7</span><span class="p">][</span><span class="mi">6</span><span class="p">:</span><span class="mi">8</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span>
+    <span class="n">entries</span> <span class="o">=</span> <span class="p">[</span><span class="n">patient</span><span class="p">]</span>
+    <span class="k">for</span> <span class="n">segment</span> <span class="ow">in</span> <span class="n">segments</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">segment</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;OBX&quot;</span><span class="p">:</span>
+            <span class="n">entries</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">entry</span><span class="p">(</span><span class="n">to_observation</span><span class="p">(</span><span class="n">segment</span><span class="p">,</span> <span class="n">patient</span><span class="p">[</span><span class="s2">&quot;fullUrl&quot;</span><span class="p">],</span> <span class="n">effective</span><span class="p">)))</span>
+    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;resourceType&quot;</span><span class="p">:</span> <span class="s2">&quot;Bundle&quot;</span><span class="p">,</span> <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;transaction&quot;</span><span class="p">,</span> <span class="s2">&quot;entry&quot;</span><span class="p">:</span> <span class="n">entries</span><span class="p">}</span>
+</code></pre></div></div>
+</details>
+
+<p class="small">mellp statements and solutions are copied from mellp at commit <code>5d8e459</code>.</p>
+
+<hr>
+
+<div class="small center">
+<p>Course content © 2026 HeyItWorked. All rights reserved.</p>
+<p>Site design adapted from <a href="https://missing.csail.mit.edu/">The Missing Semester of Your CS Education</a> under <a href="https://creativecommons.org/licenses/by-nc-sa/4.0">CC BY-NC-SA 4.0</a>. See <a href="copyright.html">copyright and license</a>.</p>
+</div>
+
+    </div>
+
+  </body>
+
+</html>

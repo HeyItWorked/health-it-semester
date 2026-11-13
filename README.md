@@ -70,6 +70,7 @@ week-0.html … week-6.html  the seven lectures
 *.html                     overview, lab setup and reference pages
 static/files/week-N/       lab code, sample messages and configs used in each lecture
 static/files/hl7-practice/ 18 HL7 v2 practice problems with tests and reference solutions
+tools/build_practice.py    builds practice-week-N.html from practice.html and a mellp checkout
 static/css, static/js      site design, adapted from MIT's Missing Semester
 static/fonts/              Source Sans Pro and Source Code Pro
 ```

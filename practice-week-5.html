@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+  <meta charset="utf-8">
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Two test-driven problem sets for weeks 3 to 6 of the Health IT Semester.">
+
+  <title>Week 5 practice &middot; Health IT Semester</title>
+
+  <link rel="stylesheet" href="static/css/main.css">
+  <link rel="stylesheet" href="static/css/syntax.css">
+  <link rel="stylesheet" href="static/css/health-it.css">
+  <script defer src="static/js/sidenotes.js"></script>
+</head>
+
+
+  <body>
+
+    <div id="nav-bg">
+  <nav id="top-nav">
+    <a href="index.html" id="logo">./health-it-semester</a>
+    <input type="checkbox" id="menu-icon">
+    <label class="menu-label" for="menu-icon"></label>
+    <div class="trigger">
+      <div class="trigger-child">
+        <span class="nav-link"><a href="weeks.html">weeks</a></span>
+        <span class="nav-link"><a href="reference.html">reference</a></span>
+        <span class="nav-link"><a href="about.html">about</a></span>
+      </div>
+    </div>
+  </nav>
+</div>
+
+
+    <div id="content">
+
+<h1 class="title">Week 5 practice</h1>
+<h2 class="subtitle">Privacy + AI · 3 exercises</h2>
+
+<p>The full text of every practice problem that fits <a href="week-5.html">week 5</a>, grouped by lecture section. Set up the two sets first: the commands are on the <a href="practice.html#the-two-sets">practice problems</a> page. Each reference solution is collapsed under its exercise; run the tests before you open it.</p>
+
+<ul>
+  <li><a href="#transport-security">MLLP on the wire</a>: <a href="#mellp-37">mellp 37</a>, <a href="#mellp-38">mellp 38</a>, <a href="#mellp-lab-a">mellp Lab A</a></li>
+</ul>
+
+<h1 id="transport-security">MLLP on the wire</h1>
+
+<p>Lecture: <a href="week-5.html#transport-security">MLLP on the wire</a>.</p>
+
+<h2 id="mellp-37">mellp 37: Lock It Down</h2>
+
+<p><code>Medium</code> · tls · certificates · ssl</p>
+<p>MLLP has no security of its own. Anyone on the path between two systems can read every name, birth date and result in the stream. Inside one data center that may be accepted; between organizations the link runs through a VPN or over TLS. With TLS the work is mostly configuration, and most of the ways to get it wrong still connect fine, which is why this problem tests the refusals as much as the round trip.</p>
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">server_context</span><span class="p">(</span><span class="n">certfile</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">keyfile</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ssl</span><span class="o">.</span><span class="n">SSLContext</span>
+<span class="k">def</span> <span class="nf">client_context</span><span class="p">(</span><span class="n">cafile</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ssl</span><span class="o">.</span><span class="n">SSLContext</span>
+<span class="k">def</span> <span class="nf">send</span><span class="p">(</span>
+    <span class="n">host</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">port</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">payload</span><span class="p">:</span> <span class="nb">bytes</span><span class="p">,</span>
+    <span class="n">context</span><span class="p">:</span> <span class="n">ssl</span><span class="o">.</span><span class="n">SSLContext</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">server_hostname</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">timeout</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">5.0</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bytes</span>
+</code></pre></div></div>
+<ol>
+<li><strong><code>server_context</code></strong> returns a server-side context that presents the certificate in <code>certfile</code> with the private key in <code>keyfile</code> (both PEM). Minimum version TLS 1.2.</li>
+<li><strong><code>client_context</code></strong> returns a client-side context that:</li>
+<li>trusts only the CA certificate in <code>cafile</code>, not the operating system's trust store,</li>
+<li>requires a valid certificate from the server and checks that it was issued for the name being connected to,</li>
+<li>accepts nothing older than TLS 1.2.</li>
+<li><strong><code>send</code></strong> is problem 16 over TLS. Connect to <code>(host, port)</code>, do the TLS handshake, send <code>payload</code> as one block, return the payload of one reply block.</li>
+<li>The name checked against the server certificate is <code>server_hostname</code>, or <code>host</code> when it is <code>None</code>. An IP address works if the certificate lists that address.</li>
+<li>A certificate problem raises <code>ssl.SSLCertVerificationError</code> from the handshake. Let it propagate.</li>
+<li><code>TimeoutError</code> when the server stays silent for <code>timeout</code> seconds.</li>
+<li><code>ConnectionError</code> when the server closes before a complete reply arrived.</li>
+<li>The reply may arrive one byte at a time.</li>
+</ol>
+<p><strong>Example 1:</strong></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>ca = CertificateAuthority(tmp)                     # harness/certs.py
+cert, key = ca.issue(&quot;localhost&quot;, server=True)     # valid for localhost and 127.0.0.1
+server = ScriptedServer(tls=server_context(cert, key))
+
+send(&quot;127.0.0.1&quot;, server.port, adt, client_context(ca.certfile), server_hostname=&quot;localhost&quot;)
+    -&gt; b&quot;MSH|^~\\&amp;|LAB|HOSP|EPIC|HOSP|...\rMSA|AA|MSG00001\r&quot;
+send(&quot;127.0.0.1&quot;, server.port, adt, client_context(ca.certfile))
+    -&gt; the same ACK: 127.0.0.1 is checked, and the certificate lists it
+</code></pre></div></div>
+<p><strong>Example 2:</strong></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>send(&quot;127.0.0.1&quot;, server.port, adt, client_context(ca.certfile), server_hostname=&quot;fhir.example&quot;)
+    -&gt; ssl.SSLCertVerificationError: the certificate is not for fhir.example
+send(&quot;127.0.0.1&quot;, server.port, adt, client_context(other_ca.certfile), server_hostname=&quot;localhost&quot;)
+    -&gt; ssl.SSLCertVerificationError: issued by a CA this client does not trust
+</code></pre></div></div>
+<p><strong>Example 3:</strong></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>expired_cert, expired_key = ca.issue(&quot;expired&quot;, server=True, expired=True)
+server = ScriptedServer(tls=server_context(expired_cert, expired_key))
+send(&quot;127.0.0.1&quot;, server.port, adt, client_context(ca.certfile), server_hostname=&quot;localhost&quot;)
+    -&gt; ssl.SSLCertVerificationError: certificate has expired
+</code></pre></div></div>
+<p><strong>Constraints:</strong></p>
+<ul>
+<li>Certificates and keys are PEM files made by <code>harness.certs.CertificateAuthority</code>. The CA file holds exactly one certificate.</li>
+<li>Tests run the server on 127.0.0.1 with <code>harness.net.ScriptedServer(tls=...)</code>, which answers each block with an ACK.</li>
+<li>A plaintext client that connects to your server must not get an ACK. The TLS layer takes care of that once <code>server_context</code> is right.</li>
+<li>Tests must also pass on Python 3.13+, where <code>ssl.create_default_context()</code> turns on strict X.509 checks. The test certificates satisfy them.</li>
+</ul>
+<p><strong>Follow-up:</strong> your partner's server certificate expires at 02:00 on a Sunday. How would you find out three weeks before, rather than from the first refused handshake?</p>
+<details>
+<summary>Hint 1</summary>
+<p><code>ssl.create_default_context(cafile=cafile)</code> builds a client context that requires a certificate, checks the hostname, and loads only <code>cafile</code> (the system store is loaded only when no CA is given). For the server, <code>ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)</code> then <code>load_cert_chain(certfile, keyfile)</code>. On Python 3.12 a new context already reports <code>minimum_version == ssl.TLSVersion.TLSv1_2</code>; set it anyway so the requirement is visible in the code.</p>
+</details>
+<details>
+<summary>Hint 2</summary>
+<p><code>context.wrap_socket(sock, server_hostname=name)</code> turns a connected socket into a TLS socket and runs the handshake. After that, <code>sendall</code> and <code>recv</code> work as before, and your problem 16 loop applies unchanged.</p>
+</details>
+
+<p>Write it in <a href="https://github.com/HeyItWorked/mellp/tree/main/problems/37-lock-it-down"><code>problems/37-lock-it-down/solution.py</code></a>, then run:</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>uv run pytest problems/37-*
+</code></pre></div></div>
+
+<details>
+<summary>Reference solution</summary>
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="nn">socket</span>
+<span class="kn">import</span> <span class="nn">ssl</span>
+
+<span class="n">SB</span> <span class="o">=</span> <span class="sa">b</span><span class="s2">&quot;</span><span class="se">\x0b</span><span class="s2">&quot;</span>
+<span class="n">EB</span> <span class="o">=</span> <span class="sa">b</span><span class="s2">&quot;</span><span class="se">\x1c\x0d</span><span class="s2">&quot;</span>
+
+
+<span class="k">def</span> <span class="nf">server_context</span><span class="p">(</span><span class="n">certfile</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">keyfile</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ssl</span><span class="o">.</span><span class="n">SSLContext</span><span class="p">:</span>
+    <span class="n">context</span> <span class="o">=</span> <span class="n">ssl</span><span class="o">.</span><span class="n">SSLContext</span><span class="p">(</span><span class="n">ssl</span><span class="o">.</span><span class="n">PROTOCOL_TLS_SERVER</span><span class="p">)</span>
+    <span class="n">context</span><span class="o">.</span><span class="n">minimum_version</span> <span class="o">=</span> <span class="n">ssl</span><span class="o">.</span><span class="n">TLSVersion</span><span class="o">.</span><span class="n">TLSv1_2</span>
+    <span class="n">context</span><span class="o">.</span><span class="n">load_cert_chain</span><span class="p">(</span><span class="n">certfile</span><span class="p">,</span> <span class="n">keyfile</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">context</span>
+
+
+<span class="k">def</span> <span class="nf">client_context</span><span class="p">(</span><span class="n">cafile</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ssl</span><span class="o">.</span><span class="n">SSLContext</span><span class="p">:</span>
+    <span class="c1"># With cafile given, the system trust store is not loaded. Hostname checking and</span>
+    <span class="c1"># CERT_REQUIRED are the defaults of a client context.</span>
+    <span class="n">context</span> <span class="o">=</span> <span class="n">ssl</span><span class="o">.</span><span class="n">create_default_context</span><span class="p">(</span><span class="n">cafile</span><span class="o">=</span><span class="n">cafile</span><span class="p">)</span>
+    <span class="n">context</span><span class="o">.</span><span class="n">minimum_version</span> <span class="o">=</span> <span class="n">ssl</span><span class="o">.</span><span class="n">TLSVersion</span><span class="o">.</span><span class="n">TLSv1_2</span>
+    <span class="k">return</span> <span class="n">context</span>
+
+
+<span class="k">def</span> <span class="nf">send</span><span class="p">(</span>
+    <span class="n">host</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">port</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">payload</span><span class="p">:</span> <span class="nb">bytes</span><span class="p">,</span>
+    <span class="n">context</span><span class="p">:</span> <span class="n">ssl</span><span class="o">.</span><span class="n">SSLContext</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">server_hostname</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">timeout</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">5.0</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bytes</span><span class="p">:</span>
+    <span class="k">with</span> <span class="n">socket</span><span class="o">.</span><span class="n">create_connection</span><span class="p">((</span><span class="n">host</span><span class="p">,</span> <span class="n">port</span><span class="p">),</span> <span class="n">timeout</span><span class="o">=</span><span class="n">timeout</span><span class="p">)</span> <span class="k">as</span> <span class="n">plain</span><span class="p">:</span>
+        <span class="k">with</span> <span class="n">context</span><span class="o">.</span><span class="n">wrap_socket</span><span class="p">(</span><span class="n">plain</span><span class="p">,</span> <span class="n">server_hostname</span><span class="o">=</span><span class="n">server_hostname</span> <span class="ow">or</span> <span class="n">host</span><span class="p">)</span> <span class="k">as</span> <span class="n">sock</span><span class="p">:</span>
+            <span class="n">sock</span><span class="o">.</span><span class="n">sendall</span><span class="p">(</span><span class="n">SB</span> <span class="o">+</span> <span class="n">payload</span> <span class="o">+</span> <span class="n">EB</span><span class="p">)</span>
+            <span class="n">buffer</span> <span class="o">=</span> <span class="sa">b</span><span class="s2">&quot;&quot;</span>
+            <span class="k">while</span> <span class="n">EB</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">buffer</span><span class="p">:</span>
+                <span class="n">chunk</span> <span class="o">=</span> <span class="n">sock</span><span class="o">.</span><span class="n">recv</span><span class="p">(</span><span class="mi">65536</span><span class="p">)</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">chunk</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">ConnectionError</span><span class="p">(</span><span class="s2">&quot;server closed before a complete reply arrived&quot;</span><span class="p">)</span>
+                <span class="n">buffer</span> <span class="o">+=</span> <span class="n">chunk</span>
+    <span class="k">return</span> <span class="n">buffer</span><span class="p">[</span><span class="n">buffer</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">SB</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span> <span class="p">:</span> <span class="n">buffer</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">EB</span><span class="p">)]</span>
+</code></pre></div></div>
+</details>
+
+<h2 id="mellp-38">mellp 38: Show Me Your Papers</h2>
+
+<p><code>Medium</code> · mutual tls · client certificates · ssl</p>
+<p>In problem 37 the client checks who the server is, but the server will talk to anyone who can reach its port. With mutual TLS the client presents a certificate too, issued by a CA the server trusts, and the server can decide per partner: the lab system may send results, a pharmacy system on the same network may not. The partner's identity is in its certificate, here the common name (CN).</p>
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">server_context</span><span class="p">(</span><span class="n">certfile</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">keyfile</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">client_cafile</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ssl</span><span class="o">.</span><span class="n">SSLContext</span>
+<span class="k">def</span> <span class="nf">client_context</span><span class="p">(</span><span class="n">cafile</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">certfile</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">keyfile</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ssl</span><span class="o">.</span><span class="n">SSLContext</span>
+<span class="k">def</span> <span class="nf">serve_once</span><span class="p">(</span>
+    <span class="n">listener</span><span class="p">:</span> <span class="n">socket</span><span class="o">.</span><span class="n">socket</span><span class="p">,</span>
+    <span class="n">context</span><span class="p">:</span> <span class="n">ssl</span><span class="o">.</span><span class="n">SSLContext</span><span class="p">,</span>
+    <span class="n">handler</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="nb">bytes</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span> <span class="nb">bytes</span><span class="p">],</span>
+    <span class="n">allowed</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span>
+</code></pre></div></div>
+<ol>
+<li><strong><code>server_context</code></strong>: as in problem 37 (presents <code>certfile</code>/<code>keyfile</code>, TLS 1.2 minimum), and requires a client certificate signed by the CA in <code>client_cafile</code>.</li>
+<li><strong><code>client_context</code></strong>: as in problem 37 (trusts only <code>cafile</code>, requires and checks the server certificate and hostname, TLS 1.2 minimum), and presents the client certificate in <code>certfile</code>/<code>keyfile</code>.</li>
+<li><strong><code>serve_once</code></strong>: accept one connection from the already-listening <code>listener</code> and do the TLS handshake. Read the CN from the client certificate. If it is in <code>allowed</code>: read one block, reply with <code>handler(payload, common_name)</code> as one block, close the connection, return the CN.</li>
+<li>If the handshake fails (no client certificate, one from an unknown CA, an expired one, a peer that is not speaking TLS) or the CN is not in <code>allowed</code>: close the connection without replying and return <code>None</code>. No exception escapes and <code>handler</code> is not called.</li>
+<li>Leave <code>listener</code> open; the next <code>serve_once</code> uses it.</li>
+</ol>
+<p><strong>Example 1:</strong></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>ca = CertificateAuthority(tmp)
+server_cert = ca.issue(&quot;localhost&quot;, server=True)
+lab = ca.issue(&quot;lab-system&quot;)                        # a client certificate, CN lab-system
+
+serve_once(listener, server_context(*server_cert, ca.certfile), handler, {&quot;lab-system&quot;})
+    client: Client(port, tls=client_context(ca.certfile, *lab)).request(adt)  -&gt; the AA
+    handler was called with (adt, &quot;lab-system&quot;)
+    -&gt; &quot;lab-system&quot;
+</code></pre></div></div>
+<p><strong>Example 2:</strong></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>pharmacy = ca.issue(&quot;pharmacy&quot;)
+serve_once(listener, server_context(*server_cert, ca.certfile), handler, {&quot;lab-system&quot;})
+    client: Client(port, tls=client_context(ca.certfile, *pharmacy)).request(adt)
+            -&gt; ConnectionError: the connection closed with no reply
+    -&gt; None
+Explanation: the certificate is valid, but pharmacy is not on the list.
+</code></pre></div></div>
+<p><strong>Example 3:</strong></p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>serve_once(listener, server_context(*server_cert, ca.certfile), handler, {&quot;lab-system&quot;})
+    client: Client(port, tls=ssl.create_default_context(cafile=ca.certfile)).request(adt)
+            -&gt; ssl.SSLError: [SSL: TLSV13_ALERT_CERTIFICATE_REQUIRED] tlsv13 alert certificate required
+    -&gt; None
+Explanation: a client without a certificate. Note that the client&#x27;s handshake succeeded and
+the error only appeared when it read.
+</code></pre></div></div>
+<p><strong>Constraints:</strong></p>
+<ul>
+<li>Certificates are made by <code>harness.certs.CertificateAuthority</code>; a client certificate's subject holds just the CN.</li>
+<li>Under TLS 1.3 the client finishes its handshake before the server has checked the client certificate. A refused client may therefore only notice on its first read, as an <code>ssl.SSLError</code> carrying the server's alert, a <code>ConnectionError</code>, or end of stream. The tests accept any of these on the client side and check your return value and the handler.</li>
+<li>Every client in the tests connects and sends promptly, so <code>serve_once</code> does not need its own timeout.</li>
+<li>Tests must also pass on Python 3.13+, where <code>ssl.create_default_context()</code> turns on strict X.509 checks. The test certificates satisfy them.</li>
+</ul>
+<p><strong>Follow-up:</strong> the lab vendor renews its certificate and the new one has CN <code>lab-system-2027</code>. What would you key the allow list on instead, and how do you rotate without an outage?</p>
+<details>
+<summary>Hint 1</summary>
+<p>On the server context, <code>verify_mode = ssl.CERT_REQUIRED</code> and <code>load_verify_locations(client_cafile)</code>. On the client context, <code>load_cert_chain(certfile, keyfile)</code>. After the handshake, <code>tls.getpeercert()["subject"]</code> is a tuple of RDNs, each a tuple of <code>(key, value)</code> pairs: <code>((("commonName", "lab-system"),),)</code>.</p>
+</details>
+<details>
+<summary>Hint 2</summary>
+<p><code>context.wrap_socket(conn, server_side=True)</code> raises <code>ssl.SSLError</code> when the handshake fails, and some other <code>OSError</code> when the peer vanishes during it. <code>ssl.SSLError</code> is itself a subclass of <code>OSError</code>, and so is every failure you can meet while reading afterwards.</p>
+</details>
+
+<p>Write it in <a href="https://github.com/HeyItWorked/mellp/tree/main/problems/38-show-me-your-papers"><code>problems/38-show-me-your-papers/solution.py</code></a>, then run:</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>uv run pytest problems/38-*
+</code></pre></div></div>
+
+<details>
+<summary>Reference solution</summary>
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="nn">socket</span>
+<span class="kn">import</span> <span class="nn">ssl</span>
+<span class="kn">from</span> <span class="nn">collections.abc</span> <span class="kn">import</span> <span class="n">Callable</span>
+
+<span class="n">SB</span> <span class="o">=</span> <span class="sa">b</span><span class="s2">&quot;</span><span class="se">\x0b</span><span class="s2">&quot;</span>
+<span class="n">EB</span> <span class="o">=</span> <span class="sa">b</span><span class="s2">&quot;</span><span class="se">\x1c\x0d</span><span class="s2">&quot;</span>
+
+
+<span class="k">def</span> <span class="nf">server_context</span><span class="p">(</span><span class="n">certfile</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">keyfile</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">client_cafile</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ssl</span><span class="o">.</span><span class="n">SSLContext</span><span class="p">:</span>
+    <span class="n">context</span> <span class="o">=</span> <span class="n">ssl</span><span class="o">.</span><span class="n">SSLContext</span><span class="p">(</span><span class="n">ssl</span><span class="o">.</span><span class="n">PROTOCOL_TLS_SERVER</span><span class="p">)</span>
+    <span class="n">context</span><span class="o">.</span><span class="n">minimum_version</span> <span class="o">=</span> <span class="n">ssl</span><span class="o">.</span><span class="n">TLSVersion</span><span class="o">.</span><span class="n">TLSv1_2</span>
+    <span class="n">context</span><span class="o">.</span><span class="n">load_cert_chain</span><span class="p">(</span><span class="n">certfile</span><span class="p">,</span> <span class="n">keyfile</span><span class="p">)</span>
+    <span class="n">context</span><span class="o">.</span><span class="n">verify_mode</span> <span class="o">=</span> <span class="n">ssl</span><span class="o">.</span><span class="n">CERT_REQUIRED</span>
+    <span class="n">context</span><span class="o">.</span><span class="n">load_verify_locations</span><span class="p">(</span><span class="n">client_cafile</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">context</span>
+
+
+<span class="k">def</span> <span class="nf">client_context</span><span class="p">(</span><span class="n">cafile</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">certfile</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">keyfile</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ssl</span><span class="o">.</span><span class="n">SSLContext</span><span class="p">:</span>
+    <span class="n">context</span> <span class="o">=</span> <span class="n">ssl</span><span class="o">.</span><span class="n">create_default_context</span><span class="p">(</span><span class="n">cafile</span><span class="o">=</span><span class="n">cafile</span><span class="p">)</span>
+    <span class="n">context</span><span class="o">.</span><span class="n">minimum_version</span> <span class="o">=</span> <span class="n">ssl</span><span class="o">.</span><span class="n">TLSVersion</span><span class="o">.</span><span class="n">TLSv1_2</span>
+    <span class="n">context</span><span class="o">.</span><span class="n">load_cert_chain</span><span class="p">(</span><span class="n">certfile</span><span class="p">,</span> <span class="n">keyfile</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">context</span>
+
+
+<span class="k">def</span> <span class="nf">common_name</span><span class="p">(</span><span class="n">certificate</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;`getpeercert()` gives the subject as a tuple of RDNs, each a tuple of (key, value) pairs.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="nb">dict</span><span class="p">(</span><span class="n">pair</span> <span class="k">for</span> <span class="n">rdn</span> <span class="ow">in</span> <span class="n">certificate</span><span class="p">[</span><span class="s2">&quot;subject&quot;</span><span class="p">]</span> <span class="k">for</span> <span class="n">pair</span> <span class="ow">in</span> <span class="n">rdn</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;commonName&quot;</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">read_block</span><span class="p">(</span><span class="n">sock</span><span class="p">:</span> <span class="n">ssl</span><span class="o">.</span><span class="n">SSLSocket</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bytes</span><span class="p">:</span>
+    <span class="n">buffer</span> <span class="o">=</span> <span class="sa">b</span><span class="s2">&quot;&quot;</span>
+    <span class="k">while</span> <span class="n">EB</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">buffer</span><span class="p">:</span>
+        <span class="n">chunk</span> <span class="o">=</span> <span class="n">sock</span><span class="o">.</span><span class="n">recv</span><span class="p">(</span><span class="mi">65536</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">chunk</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ConnectionError</span><span class="p">(</span><span class="s2">&quot;peer closed before a complete block arrived&quot;</span><span class="p">)</span>
+        <span class="n">buffer</span> <span class="o">+=</span> <span class="n">chunk</span>
+    <span class="k">return</span> <span class="n">buffer</span><span class="p">[</span><span class="n">buffer</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">SB</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span> <span class="p">:</span> <span class="n">buffer</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">EB</span><span class="p">)]</span>
+
+
+<span class="k">def</span> <span class="nf">serve_once</span><span class="p">(</span>
+    <span class="n">listener</span><span class="p">:</span> <span class="n">socket</span><span class="o">.</span><span class="n">socket</span><span class="p">,</span>
+    <span class="n">context</span><span class="p">:</span> <span class="n">ssl</span><span class="o">.</span><span class="n">SSLContext</span><span class="p">,</span>
+    <span class="n">handler</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[</span><span class="nb">bytes</span><span class="p">,</span> <span class="nb">str</span><span class="p">],</span> <span class="nb">bytes</span><span class="p">],</span>
+    <span class="n">allowed</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">conn</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">listener</span><span class="o">.</span><span class="n">accept</span><span class="p">()</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="c1"># wrap_socket takes over conn&#39;s file descriptor and closes it if the handshake fails.</span>
+        <span class="k">with</span> <span class="n">context</span><span class="o">.</span><span class="n">wrap_socket</span><span class="p">(</span><span class="n">conn</span><span class="p">,</span> <span class="n">server_side</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span> <span class="k">as</span> <span class="n">tls</span><span class="p">:</span>
+            <span class="n">name</span> <span class="o">=</span> <span class="n">common_name</span><span class="p">(</span><span class="n">tls</span><span class="o">.</span><span class="n">getpeercert</span><span class="p">())</span>
+            <span class="k">if</span> <span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">allowed</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">None</span>
+            <span class="n">reply</span> <span class="o">=</span> <span class="n">handler</span><span class="p">(</span><span class="n">read_block</span><span class="p">(</span><span class="n">tls</span><span class="p">),</span> <span class="n">name</span><span class="p">)</span>
+            <span class="n">tls</span><span class="o">.</span><span class="n">sendall</span><span class="p">(</span><span class="n">SB</span> <span class="o">+</span> <span class="n">reply</span> <span class="o">+</span> <span class="n">EB</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">name</span>
+    <span class="k">except</span> <span class="ne">OSError</span><span class="p">:</span>  <span class="c1"># ssl.SSLError and connection failures are all OSError</span>
+        <span class="k">return</span> <span class="kc">None</span>
+</code></pre></div></div>
+</details>
+
+<h2 id="mellp-lab-a">mellp Lab A: Read MLLP on the wire</h2>
+
+<p><code>Lab</code> · wireshark · 30 to 45 minutes</p>
+<p>When an interface misbehaves, both vendors say their side is fine. A packet capture settles it: it shows the bytes that were really sent, when, and who closed the connection. This lab teaches you to read one.</p>
+<p>Everything below was checked against Wireshark/TShark 4.4.</p>
+<h3>Setup</h3>
+<ol>
+<li>Install Wireshark (<code>brew install --cask wireshark</code> on macOS). Live capture needs permission to read the capture devices; without it, use the tcpdump route below.</li>
+<li>Start a capture on the loopback interface (<code>lo0</code> on macOS, <code>lo</code> on Linux, "Adapter for loopback traffic capture" on Windows) with the capture filter <code>tcp port 2575</code>.</li>
+<li>In a terminal, play the scripted conversation:</li>
+</ol>
+<p><code>uv run python labs/wireshark/traffic.py</code></p>
+<p>It prints six numbered steps. Stop the capture when it says <code>done</code>.</p>
+<p>No capture rights? Use tcpdump and open the file in Wireshark afterwards:</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>sudo tcpdump -i lo0 -w mllp.pcap tcp port 2575     # Linux: -i lo
+</code></pre></div></div>
+<p>Every question has a TShark one-liner too, in case you prefer the terminal: <code>tshark -r mllp.pcap -Y hl7</code>.</p>
+<h3>Part 1: find the messages</h3>
+<p>Type <code>hl7</code> in the display filter bar.</p>
+<ol>
+<li>How many packets remain, and how many HL7 messages do they carry? Why are those two numbers different?</li>
+<li>Click the first one. In the packet details, expand "Health Level Seven". Which line holds the patient identifier? Compare the field number Wireshark shows with the number you would write in a spec.</li>
+<li>In the packet bytes pane, find the three MLLP framing bytes of that message. Which byte comes right before <code>0x1C</code>, and what is it?</li>
+</ol>
+<details>
+<summary>Answers</summary>
+<ol>
+<li>Nine packets, ten messages: five requests and five ACKs. One packet carries two messages (step 3 glued <code>ADT^A08</code> and <code>ORM^O01</code> into one write), and its Info column reads <code>ADT (A08), ORM (O01)</code>.</li>
+<li><code>field 4: 12345^^^HOSP^MR</code>. Wireshark counts the segment name as field 1, so PID-3 is shown as "field 4" and PID-5 as "field 6". In MSH the numbers happen to match the standard (<code>field 10</code> is MSH-10) because MSH-1 is the separator itself. Do not quote Wireshark's field numbers in a ticket.</li>
+<li><code>0b</code> first, <code>1c 0d</code> last. The byte before <code>1c</code> is <code>0d</code>: the carriage return that ends the last segment. It belongs to the HL7 message, not to the framing (problem 01).</li>
+</ol>
+</details>
+<h3>Part 2: framing on the wire</h3>
+<ol>
+<li>Find the <code>ORU^R01</code>. Step 2 sent it in three writes. How does Wireshark show that, and which packet carries the "message"?</li>
+<li>Find the packet with two messages in it. How many ACK packets answer it?</li>
+<li>Filter with <code>tcp.stream eq 1</code>. What was sent on the second connection, why does <code>hl7</code> not match it, and how did that connection end?</li>
+</ol>
+<details>
+<summary>Answers</summary>
+<ol>
+<li>The ORU appears on the packet that delivered its last piece, with a "3 Reassembled TCP Segments (422 bytes)" entry in the details. The two earlier pieces are plain TCP packets. This is problem 03 done by Wireshark. Filter: <code>tcp.reassembled.length</code>.</li>
+<li>Two ACK packets, one per message, each echoing its own control ID. One TCP packet is not one message in either direction (problem 02).</li>
+<li>One data packet of 121 bytes: the first half of <code>MSG00006</code>. There is no end marker, so the dissector never sees a complete block and leaves it as TCP. The connection ends with <code>[RST, ACK]</code> from the sender instead of the usual FIN exchange. Filter: <code>tcp.flags.reset == 1</code>. This is problem 05 as the receiver's network sees it.</li>
+</ol>
+</details>
+<h3>Part 3: find the one that failed</h3>
+<ol>
+<li>Which message was refused, and why? Find it without scrolling.</li>
+<li>Show only the <code>ADT</code> messages. Then only what belongs to control ID <code>MSG00002</code>.</li>
+</ol>
+<details>
+<summary>Answers</summary>
+<ol>
+<li><code>frame contains "MSA|AE"</code> finds the ACK: <code>MSA|AE|MSG00005|PID-3 is required</code>. The request is the packet just before it on the same stream, an <code>ADT^A01</code> whose PID-3 is empty.</li>
+<li><code>hl7.message.type == "ADT"</code> (the glued packet matches because one of its two messages is an ADT). <code>hl7.field contains "MSG00002"</code> matches both the ORU and its ACK, since the ACK echoes the control ID in MSA-2.</li>
+</ol>
+</details>
+<p>Two preferences worth knowing (Preferences &gt; Protocols &gt; HL7): one adds the raw message text to the tree, which makes <code>hl7.raw.segment contains "MSA|AE"</code> work; the other adds the MLLP start and end bytes to the tree. Both are off by default.</p>
+<h3>Part 4: a port Wireshark does not know</h3>
+<p>Real interfaces rarely use 2575. Capture again with the capture filter <code>tcp port 6661</code> and run:</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>uv run python labs/wireshark/traffic.py --port 6661
+</code></pre></div></div>
+<ol>
+<li>Filter on <code>hl7</code>. What is missing?</li>
+<li>Fix it with Analyze &gt; Decode As: TCP port 6661, HL7.</li>
+</ol>
+<details>
+<summary>Answers</summary>
+<ol>
+<li>Eight packets instead of nine. Off the registered port Wireshark has to guess, and its guess starts one packet late: the very first <code>ADT^A01</code> is left as plain TCP.</li>
+<li>After Decode As, all nine are back. TShark: <code>tshark -r mllp6661.pcap -d tcp.port==6661,hl7 -Y hl7</code>.</li>
+</ol>
+</details>
+<h3>Part 5: TLS</h3>
+<p>Capture on <code>tcp port 2575</code> once more and run the same conversation encrypted:</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>uv run python labs/wireshark/traffic.py --tls
+</code></pre></div></div>
+<p>The script writes the TLS session keys to <code>sslkeys.log</code> (Python's <code>ssl.SSLContext.keylog_filename</code>). Keep that file out of version control; it decrypts the capture.</p>
+<ol>
+<li>What does Wireshark show now, with and without the <code>hl7</code> filter?</li>
+<li>Use Decode As to tell it TCP port 2575 is TLS. Find the server name the client asked for.</li>
+<li>Point Preferences &gt; Protocols &gt; TLS &gt; "(Pre)-Master-Secret log filename" at <code>sslkeys.log</code>, then right-click a packet and choose Follow &gt; TLS Stream. What do you see? Does the <code>hl7</code> filter work now?</li>
+</ol>
+<details>
+<summary>Answers</summary>
+<ol>
+<li>Nothing matches <code>hl7</code>, and every packet is shown as plain TCP. Wireshark assumed HL7 on 2575, found no block markers in the ciphertext, and gave up.</li>
+<li>The packets are now dissected as TLS. In the Client Hello, the <code>server_name</code> extension says <code>localhost</code>. That name is what the client checks the certificate against (problem 37). Message types, control IDs and patient data are not visible.</li>
+<li>The followed stream shows the MLLP conversation in clear text. The <code>hl7</code> filter still matches nothing: Wireshark decrypts the stream but does not hand TLS payload to the HL7 dissector. For encrypted interfaces you read the followed stream, or you capture on the far side of the TLS terminator.</li>
+</ol>
+<p>TShark: <code>tshark -r mllp-tls.pcap -d tcp.port==2575,tls -o tls.keylog_file:sslkeys.log -q -z follow,tls,ascii,0</code></p>
+</details>
+<h3>Take it further</h3>
+<ul>
+<li>Capture your own problem 16 client against your problem 20 server. Find the three-way handshake, the request, the ACK and the FIN exchange. Then capture problem 17's session and count the handshakes.</li>
+<li>Capture problem 18 retrying against a server that never answers. Measure your real timeout from the packet timestamps.</li>
+<li>In a real capture, the first three questions are always the same: did the message leave, did an ACK come back, and who closed the connection.</li>
+</ul>
+
+<p>The lab files are in <a href="https://github.com/HeyItWorked/mellp/tree/main/labs/wireshark"><code>labs/wireshark/</code></a>.</p>
+
+<p class="small">mellp statements and solutions are copied from mellp at commit <code>5d8e459</code>.</p>
+
+<hr>
+
+<div class="small center">
+<p>Course content © 2026 HeyItWorked. All rights reserved.</p>
+<p>Site design adapted from <a href="https://missing.csail.mit.edu/">The Missing Semester of Your CS Education</a> under <a href="https://creativecommons.org/licenses/by-nc-sa/4.0">CC BY-NC-SA 4.0</a>. See <a href="copyright.html">copyright and license</a>.</p>
+</div>
+
+    </div>
+
+  </body>
+
+</html>
