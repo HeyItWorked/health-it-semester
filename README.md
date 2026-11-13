@@ -49,7 +49,7 @@ Computer science programs teach algorithms, systems and machine learning. They r
 | 5 | [Privacy + AI](https://heyitworked.github.io/health-it-semester/week-5.html) | PHI canary test, audit log, AGENTS.md | A canary test catching a leaked driver's licence number |
 | 6 | [Ship + get hired](https://heyitworked.github.io/health-it-semester/week-6.html) | Compose file, runbook, interface spec, README | OIE, the bridge and HAPI in one compose file; replay a day twice |
 
-Reference pages: [lab setup](https://heyitworked.github.io/health-it-semester/lab-setup.html) · [US vs Canada](https://heyitworked.github.io/health-it-semester/us-vs-canada.html) · [interview prep](https://heyitworked.github.io/health-it-semester/interview-prep.html) · [what you'll learn on the job](https://heyitworked.github.io/health-it-semester/on-the-job.html) · [glossary](https://heyitworked.github.io/health-it-semester/glossary.html) · [must-read chapters](https://heyitworked.github.io/health-it-semester/must-reads.html)
+Reference pages: [lab setup](https://heyitworked.github.io/health-it-semester/lab-setup.html) · [US vs Canada](https://heyitworked.github.io/health-it-semester/us-vs-canada.html) · [interview prep](https://heyitworked.github.io/health-it-semester/interview-prep.html) · [what you'll learn on the job](https://heyitworked.github.io/health-it-semester/on-the-job.html) · [glossary](https://heyitworked.github.io/health-it-semester/glossary.html) · [must-read chapters](https://heyitworked.github.io/health-it-semester/must-reads.html) · [practice problems](https://heyitworked.github.io/health-it-semester/practice.html)
 
 ## Getting started
 
@@ -69,6 +69,7 @@ index.html                 home page and syllabus
 week-0.html … week-6.html  the seven lectures
 *.html                     overview, lab setup and reference pages
 static/files/week-N/       lab code, sample messages and configs used in each lecture
+static/files/hl7-practice/ 18 HL7 v2 practice problems with tests and reference solutions
 static/css, static/js      site design, adapted from MIT's Missing Semester
 static/fonts/              Source Sans Pro and Source Code Pro
 ```

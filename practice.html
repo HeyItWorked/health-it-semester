@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+  <meta charset="utf-8">
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Two test-driven problem sets for weeks 3 to 6 of the Health IT Semester.">
+
+  <title>Practice problems &middot; Health IT Semester</title>
+
+  <link rel="stylesheet" href="static/css/main.css">
+  <link rel="stylesheet" href="static/css/syntax.css">
+  <link rel="stylesheet" href="static/css/health-it.css">
+  <script defer src="static/js/sidenotes.js"></script>
+</head>
+
+
+  <body>
+
+    <div id="nav-bg">
+  <nav id="top-nav">
+    <a href="index.html" id="logo">./health-it-semester</a>
+    <input type="checkbox" id="menu-icon">
+    <label class="menu-label" for="menu-icon"></label>
+    <div class="trigger">
+      <div class="trigger-child">
+        <span class="nav-link"><a href="weeks.html">weeks</a></span>
+        <span class="nav-link"><a href="reference.html">reference</a></span>
+        <span class="nav-link"><a href="about.html">about</a></span>
+      </div>
+    </div>
+  </nav>
+</div>
+
+
+    <div id="content">
+    <h1 class="title">Practice problems</h1>
+<h2 class="subtitle">Small test-driven exercises for weeks 3 to 6</h2>
+
+<p>The lectures build one project. These two problem sets drill the skills
+underneath it, one small function at a time: you fill in a stub and run its
+tests until they pass. They are optional and not counted in the ~10 h per
+week.</p>
+
+<h1 id="the-two-sets">The two sets</h1>
+
+<div class="table-wrap">
+<table><thead><tr><th>Set</th><th>Size</th><th>Needs</th><th>Covers</th></tr></thead><tbody>
+<tr><td><a href="https://github.com/HeyItWorked/health-it-semester/tree/main/static/files/hl7-practice">hl7-practice</a></td><td>18 problems: 7 Easy, 8 Medium, 3 Hard</td><td>Python 3.10+, standard library only</td><td>Reading and writing messages by hand, MLLP framing, validation, routing, reconciliation, a v2 → FHIR mapping</td></tr>
+<tr><td><a href="https://github.com/HeyItWorked/mellp">mellp</a></td><td>38 problems: 14 Easy, 20 Medium, 4 Hard; 2 labs</td><td>Python 3.12, uv; python-hl7 from problem 06 on; Docker for Lab B</td><td>Framing, ACKs, sockets, retries, a small interface engine, FHIR, TLS; a Wireshark lab and a Mirth Connect lab</td></tr>
+</tbody></table>
+</div>
+
+<p><strong>hl7-practice</strong> ships with this course, in
+<code class="language-plaintext highlighter-rouge">static/files/hl7-practice/</code>. Its
+<code class="language-plaintext highlighter-rouge">README.md</code> holds all 18 specs. Problems 01 to 09 parse and
+build messages by hand; 10 to 18 are written as integration tickets that reuse
+those answers.</p>
+
+<div class="language-console highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="gp">$ </span>git clone https://github.com/HeyItWorked/health-it-semester.git
+<span class="gp">$ </span>cd health-it-semester/static/files/hl7-practice
+<span class="gp">$ </span>python3 test_practice.py             <span class="c"># every problem; untouched ones show "not started"</span>
+<span class="gp">$ </span>python3 test_practice.py p05         <span class="c"># one problem</span>
+<span class="gp">$ </span>python3 test_practice.py --solution  <span class="c"># the reference solutions</span>
+</code></pre></div></div>
+
+<p><strong>mellp</strong> is its own repository. Each problem is a folder with a
+statement, a stub and tests.</p>
+
+<div class="language-console highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="gp">$ </span>git clone https://github.com/HeyItWorked/mellp.git
+<span class="gp">$ </span>cd mellp
+<span class="gp">$ </span>uv sync
+<span class="gp">$ </span>uv run pytest problems/01-*          <span class="c"># red until you fill in problems/01-wrap-it/solution.py</span>
+<span class="gp">$ </span>uv run pytest problems/01-* --ref    <span class="c"># the same tests against the reference solution</span>
+</code></pre></div></div>
+
+<p>Inside a set, go in number order: later problems reuse earlier ones.</p>
+
+<h1 id="where-they-fit">Where they fit</h1>
+
+<p>Do a row after its lecture section. The numbers are problem numbers in each
+set, and every problem appears once. Some rows go a step past the lecture: the
+course bridge maps patients from ADT messages, and the week 4 row maps lab
+results from ORU messages too.</p>
+
+<h2 id="week-3">Week 3: <a href="week-3.html">HL7 v2 + patient identity</a></h2>
+
+<div class="table-wrap">
+<table><thead><tr><th>Lecture section</th><th>hl7-practice</th><th>mellp</th></tr></thead><tbody>
+<tr><td><a href="week-3.html#anatomy-of-a-message">Anatomy of a message</a>, <a href="week-3.html#the-carriage-return-trap">the carriage-return trap</a></td><td>01, 02, 04–07: split segments, fields, components and repeats by hand</td><td>08: delimiters and escapes by hand</td></tr>
+<tr><td><a href="week-3.html#use-a-parser">Use a parser</a></td><td></td><td>06, 07, 11: MSH, PID and OBX with python-hl7</td></tr>
+<tr><td><a href="week-3.html#message-types-and-trigger-events">Message types and trigger events</a></td><td>03, 13: read MSH-9; map ADT events to actions</td><td>12: tell ADT, ORU and ORM apart</td></tr>
+<tr><td><a href="week-3.html#getting-messages-across-mllp">Getting messages across: MLLP</a></td><td>10, 11: frame, unframe, read a split stream</td><td>01–05: framing; 15–17, 20, 21: listeners and senders on real sockets</td></tr>
+<tr><td><a href="week-3.html#acknowledgments">Acknowledgments</a></td><td>08: build the ACK</td><td>09, 10: echo MSH-10; choose AA, AE or AR</td></tr>
+<tr><td><a href="week-3.html#delivery-at-least-once">Delivery: at least once</a></td><td></td><td>18, 19, 23, 24: retries, duplicate detection, a listener that survives bad peers and restarts</td></tr>
+<tr><td><a href="week-3.html#patient-identity">Patient identity</a></td><td>17: link one person's identifiers across facilities</td><td></td></tr>
+<tr><td><a href="week-3.html#building-the-bridge">Building the bridge</a></td><td></td><td>32, 33, 35: message to JSON, PID to Patient, a small FHIR server to post to</td></tr>
+<tr><td><a href="week-3.html#when-the-fhir-server-is-down">When the FHIR server is down</a></td><td></td><td>36: turn each HTTP outcome into AA, AE or AR</td></tr>
+<tr><td><a href="week-3.html#integration-engines">Integration engines</a></td><td>09: change one field and keep the rest intact</td><td>25, 26: route by type; transform</td></tr>
+<tr><td><a href="week-3.html#the-broken-message-set">The broken message set</a></td><td>12, 14: reject bad headers and bad results</td><td>13, 14: one site's rules, then the standard's own with hl7apy</td></tr>
+</tbody></table>
+</div>
+
+<h2 id="week-4">Week 4: <a href="week-4.html">FHIR APIs</a></h2>
+
+<div class="table-wrap">
+<table><thead><tr><th>Lecture section</th><th>hl7-practice</th><th>mellp</th></tr></thead><tbody>
+<tr><td><a href="week-4.html#the-bridges-output">The week 3 bridge's output</a></td><td>18: ORU to a Patient and Observations</td><td>34: ORU to a transaction Bundle</td></tr>
+</tbody></table>
+</div>
+
+<h2 id="week-5">Week 5: <a href="week-5.html">Privacy + AI</a></h2>
+
+<div class="table-wrap">
+<table><thead><tr><th>Lecture section</th><th>hl7-practice</th><th>mellp</th></tr></thead><tbody>
+<tr><td><a href="week-5.html#transport-security">MLLP on the wire</a></td><td></td><td>37, 38: TLS and client certificates. Lab A: read a capture in Wireshark</td></tr>
+</tbody></table>
+</div>
+
+<h2 id="week-6">Week 6: <a href="week-6.html">Ship + get hired</a></h2>
+
+<div class="table-wrap">
+<table><thead><tr><th>Lecture section</th><th>hl7-practice</th><th>mellp</th></tr></thead><tbody>
+<tr><td><a href="week-6.html#deploying-an-oie-channel">Deploying an OIE channel</a></td><td></td><td>31: a small engine in one process. Lab B: your code against Mirth Connect</td></tr>
+<tr><td><a href="week-6.html#replaying-a-day">Replaying a day of traffic safely</a></td><td>15, 16: reconcile ACKs with what was sent, and results with orders</td><td>22, 27, 28: load test, message log, replay</td></tr>
+<tr><td><a href="week-6.html#when-the-bridge-goes-down">When the bridge goes down</a></td><td></td><td>29, 30: dead-letter queue; store and forward</td></tr>
+</tbody></table>
+</div>
+
+<h1 id="how-this-was-tested">How this was tested</h1>
+
+<p>On 13 Nov 2026, with Python 3.12.3, the hl7-practice reference solutions
+passed all 162 checks
+(<code class="language-plaintext highlighter-rouge">python3 test_practice.py --solution</code>). mellp runs every
+reference solution in CI on each push, and its last run on that date passed.
+Not tested yet: working the two sets alongside the lectures in the order
+above, which is a match by topic.</p>
+
+<hr>
+
+<div class="small center">
+<p>Course content © 2026 HeyItWorked. All rights reserved.</p>
+<p>Site design adapted from <a href="https://missing.csail.mit.edu/">The Missing Semester of Your CS Education</a> under <a href="https://creativecommons.org/licenses/by-nc-sa/4.0">CC BY-NC-SA 4.0</a>. See <a href="copyright.html">copyright and license</a>.</p>
+</div>
+
+    </div>
+
+  </body>
+
+</html>
