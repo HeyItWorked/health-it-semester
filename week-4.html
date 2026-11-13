@@ -38,8 +38,8 @@
     <h1 class="title">FHIR APIs</h1>
 <h2 class="subtitle">Week 4 · ~10 h (SMART often runs over)</h2>
 
-<p>FHIR is the API layer apps, payers and data-sharing rules build on: US
-certified EHRs must offer FHIR APIs, and Canada's national profiles are FHIR R4
+<p>FHIR is the API that apps, insurers (“payers”) and data-sharing rules are built
+on. EHRs certified in the US must offer FHIR APIs, and Canada's national profiles are FHIR R4
 too. When a patient's phone shows last month's lab results, or a clinician's
 screen shows a warning card from a service the hospital bought, a FHIR request
 was made somewhere. When those requests are careless, the failures are quiet.
@@ -58,12 +58,24 @@ into the clinical workflow: SMART on FHIR, which lets an app act for a user,
 and CDS Hooks, which lets a service speak up while a clinician is looking at a
 chart.</p>
 
-<p>Every command on this page was run on 31 Oct 2026 against the course lab:
-HAPI FHIR 8.12.0 in Docker, Synthea (master build of 21 Oct 2026), the HL7
-FHIR validator 7.0.3 on OpenJDK 25, Node 20 with fhirclient 3.0.1, Python 3.12
-and jq 1.7, plus the public SMART launcher sandbox. The outputs are copied from
-one run of the lab script. Yours will differ in server ids, timestamps and
-random values.</p>
+<p><strong>Words you need this week.</strong>
+<strong>Profile</strong>: a set of extra rules on top of base FHIR (week 0).
+<strong>Implementation guide (IG)</strong>: a published package of profiles and
+the documentation around them; US Core is one. <strong>Token</strong>: what an
+app sends with each request to prove what it is allowed to do.
+<strong>Scope</strong>: one permission inside a token, written as a string, such
+as “read this patient's Observations”. <strong>Certified EHR</strong>: an EHR
+that has passed the US government's health IT certification program.</p>
+
+<h1 id="done-when">Done when</h1>
+
+<p>This week you build profile validation in CI and a SMART app. You are done when:</p>
+
+<ul>
+  <li>Your bridge's output validates in CI (exercise 6).</li>
+  <li>Every Synthea error is explained (exercise 2).</li>
+  <li>Your SMART app shows labs and vitals via the launcher (exercise 7).</li>
+</ul>
 
 <h1 id="a-server-with-patients-in-it">A server with patients in it</h1>
 
@@ -288,7 +300,7 @@ be huge.</p>
 <h2 id="bulk-export">Bulk export</h2>
 
 <p>Analytics, payers and quality reporting need everything, and paging through
-a population would take hours and pin the server. The Bulk Data Access
+a population would take hours and overload the server. The Bulk Data Access
 specification defines <code class="language-plaintext highlighter-rouge">$export</code>: kick off a job, poll a status URL,
 and download newline-delimited JSON (one resource per line) when it's
 ready:</p>
@@ -323,7 +335,7 @@ authenticating as itself, with no user), and the files are as sensitive as
 the EHR. Our lab server has no authentication, which is fine for synthetic
 data and nothing else.</p>
 
-<h1 id="what-versus-how">What versus how</h1>
+<h1 id="what-versus-how">What must be shared, and how it is shaped</h1>
 
 <p>Base FHIR is deliberately loose: almost every element is optional, codes can
 come from any system, and extensions can carry anything. That's why FHIR fits
@@ -658,11 +670,24 @@ CLI with pinned packages in CI.</p>
 <p>Real EHR FHIR APIs require a token, and SMART App Launch is how an app gets
 one: OAuth 2.0 plus conventions for discovery, scopes and launch context. In an
 <strong>EHR launch</strong> the clinician is already in the chart and opens the
-app from inside it; the EHR passes the app an <code class="language-plaintext highlighter-rouge">iss</code> (the FHIR base
-URL) and an opaque <code class="language-plaintext highlighter-rouge">launch</code> value, which the app trades for a token
-tied to that patient and user. In a <strong>standalone launch</strong> the app
+app from inside it. Step by step:</p>
+
+<ol>
+  <li>The EHR calls the app's launch URL with <code class="language-plaintext highlighter-rouge">iss</code> (the FHIR base
+  URL) and an opaque <code class="language-plaintext highlighter-rouge">launch</code> value.</li>
+  <li>The app reads <code class="language-plaintext highlighter-rouge">.well-known/smart-configuration</code> under
+  <code class="language-plaintext highlighter-rouge">iss</code> to find the authorize and token endpoints.</li>
+  <li>The app sends the browser to the authorize endpoint with the scopes it
+  wants, the <code class="language-plaintext highlighter-rouge">launch</code> value and a PKCE challenge.</li>
+  <li>The EHR sends the browser back to the app with a short-lived code.</li>
+  <li>The app trades the code and the PKCE verifier for a token
+  tied to that patient and user.</li>
+</ol>
+
+<p>In a <strong>standalone launch</strong> the app
 starts on its own, like a patient's phone app, and the patient is chosen
-during login.</p>
+during login. Scopes and PKCE are explained next, and the curl walk-through
+below runs every step.</p>
 
 <p>Scopes say what the token allows. In SMART v2,
 <code class="language-plaintext highlighter-rouge">patient/Observation.rs</code> means read and search Observations for the
@@ -906,7 +931,7 @@ HbA1c:</p>
              <span class="s2">"indicator"</span><span class="p">:</span> <span class="s2">"info"</span><span class="p">,</span> <span class="s2">"source"</span><span class="p">:</span> <span class="n">SOURCE</span><span class="p">}]</span>
 </code></pre></div></div>
 
-<p>The course had CDS Hooks as “not tested yet”. We ran this service locally,
+<p>We ran this service locally,
 with curl playing the EHR: once with a prefetched result from our HAPI, then
 for a patient with no HbA1c and no prefetch, so the service queried the
 <code class="language-plaintext highlighter-rouge">fhirServer</code> itself:</p>
@@ -1007,14 +1032,6 @@ We did not run Inferno for this page.</p>
 <a href="static/files/week-4/launch.json">launch.json</a>,
 <a href="static/files/week-4/cds-service.py">cds-service.py</a>.</p>
 
-<h1 id="done-when">Done when</h1>
-
-<ul>
-  <li>Your bridge's output validates in CI.</li>
-  <li>Every Synthea error is explained.</li>
-  <li>Your SMART app shows labs and vitals via the launcher.</li>
-</ul>
-
 <h1 id="exercises">Exercises</h1>
 
 <ol>
@@ -1072,6 +1089,15 @@ We did not run Inferno for this page.</p>
   <li><a href="https://inferno.healthit.gov/">Inferno test kits</a></li>
   <li><a href="https://docs.smarthealthit.org/client-js/">fhirclient (SMART JavaScript client)</a></li>
 </ul>
+
+<h1 id="tested-with">Tested with</h1>
+
+<p>Every command on this page was run on 31 Oct 2026 against the course lab:
+HAPI FHIR 8.12.0 in Docker, Synthea (master build of 21 Oct 2026), the HL7
+FHIR validator 7.0.3 on OpenJDK 25, Node 20 with fhirclient 3.0.1, Python 3.12
+and jq 1.7, plus the public SMART launcher sandbox. The outputs are copied from
+one run of the lab script. Yours will differ in server ids, timestamps and
+random values.</p>
 
 <hr>
 

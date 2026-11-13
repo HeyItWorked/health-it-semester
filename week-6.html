@@ -50,21 +50,34 @@ them.</p>
 We put HAPI FHIR, the week 3 bridge and Open Integration Engine (OIE) into one
 Docker Compose file, deploy an OIE channel through its REST API, keep the
 channel's XML in git so every change is a reviewable diff, replay a whole day of
-traffic to prove it creates no duplicate patients, take the bridge down to watch
-the engine queue and an on-call check page, and roll a change back. Then we
+traffic to prove it creates no duplicate patients, stop the bridge and watch the
+engine hold the messages in a queue while our on-call script raises an alert
+(“pages” someone), and roll a change back. Then we
 write the documents that turn a lab into a portfolio piece: an interface spec, a
 runbook and a README.</p>
 
-<p>Every command on this page was run on 31 Oct 2026 against the course lab:
-HAPI FHIR 8.12.0, OIE 4.5.2 and the week 3 bridge on Python 3.12 with
-python-hl7 0.4.5, started by Docker Compose v5.4.0. The outputs are copied from
-one run. Yours will differ in timestamps, control IDs, commit hashes and server
-ids.</p>
+<p><strong>Words you need this week.</strong>
+<strong>Feed</strong>: the stream of messages one system sends to another.
+<strong>On-call</strong>: the person who must respond when something breaks, day
+or night. <strong>Page</strong>: to alert that person.
+<strong>Interface spec</strong>: the written contract between the team that
+sends a feed and the team that receives it. <strong>Runbook</strong>: the
+step-by-step operations guide for whoever is on call.</p>
+
+<h1 id="done-when">Done when</h1>
+
+<p>This week you build a Compose file, a runbook, an interface spec and a README. You are done when:</p>
+
+<ul>
+  <li>A reviewer has it running in 10 minutes (exercise 4).</li>
+  <li>A replayed day creates no duplicates.</li>
+  <li>Spec, channel exports and code agree.</li>
+</ul>
 
 <h1 id="one-command-lab">One command to a running lab</h1>
 
 <p>The first thing a reviewer does with your project is try to run it, and the
-commonest way that fails is this week's first watch-out: a README that only works
+commonest way that fails is a README that only works
 on your machine. Your machine has the right Java, an image you pulled months
 ago, a port you opened once. A reviewer's has none of that. So describe the whole
 lab in one file Docker can run anywhere. Messages flow from the sender to OIE on
@@ -261,7 +274,7 @@ file in git should be what the server exports, which we check below.</p>
 <p>The REST API wants basic authentication and an <code class="language-plaintext highlighter-rouge">X-Requested-With</code>
 header on every call. Any value will do, but without the header the server
 answers <code class="language-plaintext highlighter-rouge">400</code>; OIE's source calls this check
-<code class="language-plaintext highlighter-rouge">RequestedWithFilter</code>. The summary from the course overview:</p>
+<code class="language-plaintext highlighter-rouge">RequestedWithFilter</code>. The four calls we need:</p>
 
 <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code># OIE 4.5.2 REST API: basic auth plus
 # header X-Requested-With: OpenAPI
@@ -580,7 +593,7 @@ it.</p>
   (<code class="language-plaintext highlighter-rouge">0b 1c 0d</code>), and counted it as queued, not as an error.</p>
 </blockquote>
 
-<p>The other half of the output is the on-call check paging. An interface that
+<p>The rest of the output is our on-call script raising an alert. An interface that
 pages on every error trains people to ignore pages: one malformed message is a
 ticket for the morning, and the sender already knows because it got an AE. What
 needs a human now is a sign that many patients are affected: messages piling up
@@ -658,7 +671,7 @@ with its previous run and computes a rate; that's an exercise.</p>
 
 <h2 id="tested-rollback">A rollback you have actually run</h2>
 
-<p>The second watch-out: a rollback plan nobody has run. Change requests always
+<p>The other classic failure is a rollback plan nobody has run. Change requests always
 have a rollback section, often one line written by someone who never tried it.
 Find out before the window whether the previous version can be restored, how
 long it takes, and how you will know it worked. With the channel in git,
@@ -833,24 +846,16 @@ restart” shows you know a lab from production.</p>
 
 <p>Before you share the link, clone the repo into an empty directory on another
 machine, follow the README literally, and time it. Every step it was missing goes
-into it. A reviewer has it running in 10 minutes when you have watched it
-happen.</p>
+into it. Only claim “runs in 10 minutes” after you have watched someone else
+do it.</p>
 
 <p>Then prepare to talk about decisions, not features: why AA only after the
 write, why key on the MRN and not <code class="language-plaintext highlighter-rouge">MSH-10</code>, why page on queue depth,
-what happens when the FHIR server is down. Each answer here comes with a session
-you ran. <a href="interview-prep.html">Interview prep</a> has questions to
-practise and how to tell a project's story in a few minutes;
-<a href="on-the-job.html">On the job</a> covers the first weeks on an
-integration team: tickets, change windows and on-call.</p>
-
-<h1 id="done-when">Done when</h1>
-
-<ul>
-  <li>A reviewer has it running in 10 minutes.</li>
-  <li>A replayed day creates no duplicates.</li>
-  <li>Spec, channel exports and code agree.</li>
-</ul>
+what happens when the FHIR server is down. Each answer here comes with commands
+you ran. <a href="interview-prep.html">Interview prep</a> lists questions to
+practise, with the week that prepared you for each;
+<a href="on-the-job.html">On the job</a> lists what the course leaves for
+your employer to teach.</p>
 
 <h1 id="exercises">Exercises</h1>
 
@@ -899,6 +904,14 @@ integration team: tickets, change windows and on-call.</p>
   <li><a href="interview-prep.html">Interview prep</a></li>
   <li><a href="on-the-job.html">On the job</a></li>
 </ul>
+
+<h1 id="tested-with">Tested with</h1>
+
+<p>Every command on this page was run on 31 Oct 2026 against the course lab:
+HAPI FHIR 8.12.0, OIE 4.5.2 and the week 3 bridge on Python 3.12 with
+python-hl7 0.4.5, started by Docker Compose v5.4.0. The outputs are copied from
+one run. Yours will differ in timestamps, control IDs, commit hashes and server
+ids.</p>
 
 <hr>
 

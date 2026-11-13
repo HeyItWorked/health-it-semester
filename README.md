@@ -40,8 +40,8 @@ Computer science programs teach algorithms, systems and machine learning. They r
 
 | Week | Topic | You build | In the lab |
 |:---:|---|---|---|
-| | [Course overview](https://heyitworked.github.io/health-it-semester/overview.html) | Prework (~4 h): Docker, JDK 17+, Python 3, Node 20, .NET 8 SDK | |
-| 0 | [Stack short runs](https://heyitworked.github.io/health-it-semester/week-0.html) | One FHIR kata in Java, C#, Python and TypeScript | Search, `$validate` and conditional PUT against HAPI FHIR |
+| | [Course overview](https://heyitworked.github.io/health-it-semester/overview.html) | Prework (~4 h): Docker, JDK 17+, Maven, Python 3, Node 20, .NET 8 SDK, jq, socat | |
+| 0 | [One exercise, four stacks](https://heyitworked.github.io/health-it-semester/week-0.html) | One FHIR kata in Java, C#, Python and TypeScript | Search, `$validate` and conditional PUT against HAPI FHIR |
 | 1 | [How care works](https://heyitworked.github.io/health-it-semester/week-1.html) | A nurse's-eye account of one encounter; a glossary | Trace a synthetic ED visit through FHIR with jq |
 | 2 | [Data + SQL](https://heyitworked.github.io/health-it-semester/week-2.html) | Five clinical questions in SQL and jq | Explain every count where SQL and FHIR disagree |
 | 3 | [HL7 v2 + patient identity](https://heyitworked.github.io/health-it-semester/week-3.html) | An MLLP listener that upserts FHIR Patients | ACK only after the write; a broken-message test set |
@@ -57,7 +57,7 @@ Reference pages: [lab setup](https://heyitworked.github.io/health-it-semester/la
    ```sh
    git clone https://github.com/HeyItWorked/health-it-semester.git
    ```
-2. **Do the prework** (~4 h): install Docker, JDK 17+, Python 3, Node 20 and the .NET 8 SDK, and create one git repo for your course project.
+2. **Do the prework** (~4 h): install Docker, JDK 17+, Maven, Python 3, Node 20, the .NET 8 SDK, jq and socat, download two jars, and create one git repo for your course project. The [course overview](https://heyitworked.github.io/health-it-semester/overview.html) has the checklist.
 3. **Give each week ~10 hours**: about 2 to learn, 6 to build and 2 to run the "done when" checks. Each week's lab code and sample data are in [`static/files/`](static/files/).
 
 Found a mistake, or want to use the material? [Open an issue](https://github.com/HeyItWorked/health-it-semester/issues).

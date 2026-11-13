@@ -58,11 +58,14 @@ belongs to it: what was recorded, by whom, and when. Then we write the visit
 down twice, as a nurse would tell it and as a timeline that ties each sentence
 to a FHIR resource and field. That pair is your build for the week.</p>
 
-<p>Every command on this page was run on 31 Oct 2026 with Synthea (master
-build of 21 Oct 2026) on OpenJDK 25.0.4.1, jq 1.7 and the Canada configuration
-from synthea-international. The outputs are copied from those runs. If you use
-the same seeds and reference date you should get the same patients; other
-Synthea builds will give different ones.</p>
+<h1 id="done-when">Done when</h1>
+
+<p>This week you build a nurse's account of one encounter, a timeline that backs it up, and the start of a glossary. The numbered steps are under <a href="#build">Your build this week</a>. You are done when:</p>
+
+<ul>
+  <li>A non-engineer can follow your account. Ask one to read it.</li>
+  <li>Every timestamp points to a FHIR resource and field.</li>
+</ul>
 
 <h1 id="the-patient-journey">The patient journey</h1>
 
@@ -192,11 +195,12 @@ digits are Synthea's, so nobody mistakes her for a real person):</p>
 is its own Observation. Then come Procedures, Claims with their
 ExplanationOfBenefit twins, and one Encounter per visit.</p>
 
-<p>Something is missing, though. Where are the notes? There is no
-DocumentReference in this list. The <code class="language-plaintext highlighter-rouge">--exporter.fhir.use_us_core_ig=false</code>
-flag came from an earlier version of this lab, where it kept the output plain
-FHIR R4. On this Synthea build, turning off the US Core profiles also turns off
-clinical notes. Run it again with the default, into a separate directory:</p>
+<p>Something is missing, though: there are no notes. There is no
+DocumentReference in this list. That is a side effect of the flag we used.
+<code class="language-plaintext highlighter-rouge">--exporter.fhir.use_us_core_ig=false</code>
+gives plain FHIR R4, which week 0 needed, but on this Synthea build it also
+turns off clinical notes. This week we need the notes, so run it again without
+the flag, into a separate directory:</p>
 
 <div class="language-console highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="gp">$ </span>java<span class="w"> </span>-jar<span class="w"> </span>synthea-with-dependencies.jar<span class="w"> </span><span class="se">\</span>
 <span class="w">    </span>-p<span class="w"> </span><span class="m">10</span><span class="w"> </span>-s<span class="w"> </span><span class="m">42</span><span class="w"> </span>-cs<span class="w"> </span><span class="m">42</span><span class="w"> </span>-r<span class="w"> </span><span class="m">20261031</span><span class="w"> </span>--exporter.baseDirectory<span class="o">=</span>./uscore/<span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="w"> </span><span class="se">\</span>
@@ -220,10 +224,8 @@ The 30 extra DiagnosticReports are the same notes wrapped as reports. From
 here on we use this file, copied to <code class="language-plaintext highlighter-rouge">lindsay.json</code>.</p>
 
 <blockquote>
-  <p><strong>Tested:</strong> an earlier version of this page quoted resource
-  counts from an older Synthea build, including DocumentReferences with US
-  Core turned off. This build gives the numbers above. Counts move between
-  builds, so never hard-code them in a test.</p>
+  <p><strong>Tested:</strong> resource counts change between Synthea builds;
+  an older build gave different numbers. Never hard-code them in a test.</p>
 </blockquote>
 
 <h1 id="encounters">Encounters</h1>
@@ -455,7 +457,7 @@ been chosen more than two hours before there was any evidence for it, and a
 report of “time from arrival to antibiotic” comes out as zero. For an
 inpatient stay the error is days, not hours.</p>
 
-<p>Watch out for taking the encounter's start time as the time of every
+<p>Don't use the encounter's start time as the time of every
 event in it. The rule: <strong>use the time field of the resource that describes the
 event</strong>, and treat <code class="language-plaintext highlighter-rouge">Encounter.period</code> as the frame around
 them. When a resource has no time of its own, say so in your analysis rather
@@ -763,7 +765,7 @@ MRN is unique only within the system that issued it, which is why a
 <a href="https://hl7.org/fhir/R4/patient.html">FHIR Patient</a> identifier
 pairs a <code class="language-plaintext highlighter-rouge">system</code> with the <code class="language-plaintext highlighter-rouge">value</code>. When a clerk can't
 find a patient because of a typo and registers them again, one person becomes
-two records, each holding part of the story. And watch out for assuming one
+two records, each holding part of the story. So never assume one
 MRN per person across hospitals. Week 3 deals with finding and merging
 duplicates.</p>
 
@@ -859,11 +861,14 @@ runs above.</p>
 noon with cystitis. It had started six days earlier, and she'd had a video
 visit, a clinic visit and a follow-up about it since. We took her history,
 triaged her at 12:10 and did vitals at 12:25; her triage score said she'd
-need one resource. The doctor examined her at 12:30. We started a urinalysis
+need one resource (one test or treatment). The doctor examined her at 12:30. We started a urinalysis
 at 13:29 and collected the sample at 13:39. Results were back at 13:59:
 nitrites positive, leukocytes one plus. The doctor started antibiotics, and
 she was discharged at 14:09 with a prescription for nitrofurantoin. She was
 out of the department by 14:19.</em></p>
+
+<p>She was 15 at this visit in 2023; the “19” in Synthea's patient list is
+her age on our 2026 reference date.</p>
 
 <p>And the timeline. Each row is one line of the jq output, translated:</p>
 
@@ -918,13 +923,6 @@ mentions.</p>
   against MedlinePlus or a similar reference.</p>
 </blockquote>
 
-<h1 id="done-when">Done when</h1>
-
-<ul>
-  <li>A non-engineer can follow your account.</li>
-  <li>Every timestamp points to a FHIR resource and field.</li>
-</ul>
-
 <h1 id="exercises">Exercises</h1>
 
 <ol>
@@ -973,6 +971,14 @@ mentions.</p>
   <li><a href="https://build.fhir.org/ig/HL7/v2-to-fhir/">HL7 v2-to-FHIR mapping guide</a></li>
   <li><a href="https://github.com/synthetichealth/synthea-international">synthea-international (Canada config in ca/)</a></li>
 </ul>
+
+<h1 id="tested-with">Tested with</h1>
+
+<p>Every command on this page was run on 31 Oct 2026 with Synthea (master
+build of 21 Oct 2026) on OpenJDK 25.0.4.1, jq 1.7 and the Canada configuration
+from synthea-international. The outputs are copied from those runs. If you use
+the same seeds and reference date you should get the same patients; other
+Synthea builds will give different ones.</p>
 
 <hr>
 

@@ -56,14 +56,21 @@ exactly one FHIR Patient per medical record number, however many times the
 sender repeats itself. Identity mistakes here duplicate patients or merge the
 wrong ones; delivery mistakes lose results. Both reach the bedside.</p>
 
-<p>Every command on this page was run on 31 Oct 2026 against the course lab: a
-local HAPI FHIR 8.12.0 server in Docker and python-hl7 0.4.5. The outputs are copied
-from those runs. Yours will differ in timestamps, control IDs and server ids.</p>
+<h1 id="done-when">Done when</h1>
+
+<p>This week you build a bridge: a listener that receives HL7 v2 messages and keeps one FHIR Patient per medical record number. You are done when:</p>
+
+<ul>
+  <li>Every broken case gets its expected result (exercise 5).</li>
+  <li>Resends stay one patient; an A40 leaves one active record (exercise 6).</li>
+  <li>Killing the listener mid-feed loses nothing (exercise 7).</li>
+</ul>
 
 <h1 id="anatomy-of-a-message">Anatomy of a message</h1>
 
 <p>Here is a complete admission message, the kind a registration system sends
-when a patient is admitted. It is four lines long, sort of:</p>
+when a patient is admitted. It looks like four lines; the carriage-return
+section below shows why it isn't quite:</p>
 
 <div class="language-console highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="gp">$ </span>tr<span class="w"> </span><span class="s1">&#39;\r&#39;</span><span class="w"> </span><span class="s1">&#39;\n&#39;</span><span class="w"> </span>&lt;<span class="w"> </span>adt.hl7
 <span class="go">MSH|^~\&amp;|REGADT|GENHOSP|BRIDGE|LAB|20261031093000||ADT^A01^ADT_A01|MSG00001|T|2.5.1</span>
@@ -101,21 +108,28 @@ repetition, escape and subcomponent characters, in that order. Nearly everyone
 uses the defaults, but a parser that hard-codes them is betting that everyone
 always will.</p>
 
-<p>The rest of <code class="language-plaintext highlighter-rouge">MSH</code> tells the receiver what it is looking at.
-<code class="language-plaintext highlighter-rouge">MSH-3</code> and <code class="language-plaintext highlighter-rouge">MSH-4</code> name the sending application and
-facility, <code class="language-plaintext highlighter-rouge">MSH-5</code> and <code class="language-plaintext highlighter-rouge">MSH-6</code> the receiving ones, and
-<code class="language-plaintext highlighter-rouge">MSH-7</code> says when the message was created. <code class="language-plaintext highlighter-rouge">MSH-9</code> is the
-message type, <code class="language-plaintext highlighter-rouge">MSH-10</code> a control ID the sender uses to match up the
-reply, <code class="language-plaintext highlighter-rouge">MSH-11</code> the processing ID (<code class="language-plaintext highlighter-rouge">P</code> for production,
-<code class="language-plaintext highlighter-rouge">T</code> for training, <code class="language-plaintext highlighter-rouge">D</code> for debugging) and
-<code class="language-plaintext highlighter-rouge">MSH-12</code> the version of the standard, here 2.5.1. Many interfaces
+<p>The rest of <code class="language-plaintext highlighter-rouge">MSH</code> tells the receiver what it is looking at:</p>
+
+<div class="table-wrap">
+<table><thead><tr><th>Field</th><th>Meaning</th><th>In our sample</th></tr></thead><tbody>
+<tr><td><code class="language-plaintext highlighter-rouge">MSH-3</code>, <code class="language-plaintext highlighter-rouge">MSH-4</code></td><td>Sending application and facility</td><td><code class="language-plaintext highlighter-rouge">REGADT</code>, <code class="language-plaintext highlighter-rouge">GENHOSP</code></td></tr>
+<tr><td><code class="language-plaintext highlighter-rouge">MSH-5</code>, <code class="language-plaintext highlighter-rouge">MSH-6</code></td><td>Receiving application and facility</td><td><code class="language-plaintext highlighter-rouge">BRIDGE</code>, <code class="language-plaintext highlighter-rouge">LAB</code></td></tr>
+<tr><td><code class="language-plaintext highlighter-rouge">MSH-7</code></td><td>When the message was created</td><td><code class="language-plaintext highlighter-rouge">20261031093000</code></td></tr>
+<tr><td><code class="language-plaintext highlighter-rouge">MSH-9</code></td><td>Message type</td><td><code class="language-plaintext highlighter-rouge">ADT^A01^ADT_A01</code></td></tr>
+<tr><td><code class="language-plaintext highlighter-rouge">MSH-10</code></td><td>Control ID the sender uses to match up the reply</td><td><code class="language-plaintext highlighter-rouge">MSG00001</code></td></tr>
+<tr><td><code class="language-plaintext highlighter-rouge">MSH-11</code></td><td>Processing ID: <code class="language-plaintext highlighter-rouge">P</code> production, <code class="language-plaintext highlighter-rouge">T</code> training, <code class="language-plaintext highlighter-rouge">D</code> debugging</td><td><code class="language-plaintext highlighter-rouge">T</code></td></tr>
+<tr><td><code class="language-plaintext highlighter-rouge">MSH-12</code></td><td>Version of the standard</td><td><code class="language-plaintext highlighter-rouge">2.5.1</code></td></tr>
+</tbody></table>
+</div>
+
+<p>Many interfaces
 still run 2.3 or 2.3.1; the structure is the same, but fields were added and
 renamed between versions, so the interface spec names the version you build
 against.</p>
 
 <h2 id="the-carriage-return-trap">The carriage-return trap</h2>
 
-<p>We cheated above by piping the file through <code class="language-plaintext highlighter-rouge">tr</code>. Segments in HL7
+<p>Above, we piped the file through <code class="language-plaintext highlighter-rouge">tr</code> to make it readable. Segments in HL7
 v2 end with a carriage return (<code class="language-plaintext highlighter-rouge">\r</code>, byte <code class="language-plaintext highlighter-rouge">0x0D</code>), not the
 newline (<code class="language-plaintext highlighter-rouge">\n</code>) that Unix tools expect. Look at the raw file:</p>
 
@@ -623,14 +637,6 @@ and 9 the expected answers above, and 4 and 7 as well.</p>
   each expected result before you run it.</p>
 </blockquote>
 
-<h1 id="done-when">Done when</h1>
-
-<ul>
-  <li>Every broken case gets its expected result.</li>
-  <li>Resends stay one patient; an A40 leaves one active record.</li>
-  <li>Killing the listener mid-feed loses nothing.</li>
-</ul>
-
 <h1 id="exercises">Exercises</h1>
 
 <ol>
@@ -674,6 +680,12 @@ and 9 the expected answers above, and 4 and 7 as well.</p>
   <li><a href="https://hl7.org/fhir/R4/http.html#cond-update">FHIR R4 RESTful API: conditional update</a></li>
   <li><a href="https://www.hl7.eu/HL7v2x/v25/hl7v25tab0357.htm">HL7 table 0357, message error condition codes</a></li>
 </ul>
+
+<h1 id="tested-with">Tested with</h1>
+
+<p>Every command on this page was run on 31 Oct 2026 against the course lab: a
+local HAPI FHIR 8.12.0 server in Docker and python-hl7 0.4.5. The outputs are copied
+from those runs. Yours will differ in timestamps, control IDs and server ids.</p>
 
 <hr>
 

@@ -38,14 +38,27 @@
     <h1 class="title">Lab setup</h1>
 <h2 class="subtitle">All run on 31 Oct 2026</h2>
 
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>docker<span class="w"> </span>run<span class="w"> </span>-p<span class="w"> </span><span class="m">8080</span>:8080<span class="w"> </span>hapiproject/hapi
+<p>These are the lab's five commands. Do the <a href="overview.html#before-you-start-prework-4-h">prework</a> first: it installs the tools and downloads the two jars.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>docker<span class="w"> </span>run<span class="w"> </span>-d<span class="w"> </span>--name<span class="w"> </span>hapi<span class="w"> </span>-p<span class="w"> </span><span class="m">8080</span>:8080<span class="w"> </span>hapiproject/hapi:latest
 docker<span class="w"> </span>run<span class="w"> </span>-p<span class="w"> </span><span class="m">8443</span>:8443<span class="w"> </span>-p<span class="w"> </span><span class="m">6661</span>:6661<span class="w"> </span>openintegrationengine/engine
 java<span class="w"> </span>-jar<span class="w"> </span>synthea-with-dependencies.jar<span class="w"> </span>-p<span class="w"> </span><span class="m">100</span><span class="w"> </span>--exporter.fhir.use_us_core_ig<span class="o">=</span><span class="nb">false</span>
 mllp_send<span class="w"> </span>--loose<span class="w"> </span>-f<span class="w"> </span>adt.hl7<span class="w"> </span>-p<span class="w"> </span><span class="m">6661</span><span class="w"> </span>localhost
 java<span class="w"> </span>-jar<span class="w"> </span>validator_cli.jar<span class="w"> </span>p.json<span class="w"> </span>-version<span class="w"> </span><span class="m">4</span>.0.1<span class="w"> </span>-ig<span class="w"> </span>hl7.fhir.ca.baseline
 </code></pre></div></div>
 
-<p>Load Synthea into HAPI by POSTing <code class="language-plaintext highlighter-rouge">hospitalInformation*</code>, <code class="language-plaintext highlighter-rouge">practitionerInformation*</code>, then patient bundles. OIE logs in as admin/admin; <code class="language-plaintext highlighter-rouge">pip install hl7</code> gives <code class="language-plaintext highlighter-rouge">mllp_send</code>; for Canadian patients put <a href="https://github.com/synthetichealth/synthea-international">synthea-international</a>'s <code class="language-plaintext highlighter-rouge">ca/</code> first on the classpath.</p>
+<p>Check that the FHIR server answers; it needs about a minute to start. This should print <code class="language-plaintext highlighter-rouge">"4.0.1"</code>:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>curl -s localhost:8080/fhir/metadata | jq .fhirVersion
+</code></pre></div></div>
+
+<ul>
+<li><strong>Loading patients.</strong> POST Synthea's bundles to HAPI in this order: <code class="language-plaintext highlighter-rouge">hospitalInformation*</code>, <code class="language-plaintext highlighter-rouge">practitionerInformation*</code>, then the patient bundles. <a href="week-0.html">Week 0</a> shows why the order matters.</li>
+<li><strong>The Synthea flag.</strong> <code class="language-plaintext highlighter-rouge">--exporter.fhir.use_us_core_ig=false</code> gives plain FHIR R4. Week 0 uses it. Weeks 1, 2 and 4 leave it out, because they need the clinical notes and the US Core profiles.</li>
+<li><strong>OIE.</strong> Log in as admin / admin. That is for the lab only.</li>
+<li><strong><code class="language-plaintext highlighter-rouge">mllp_send</code></strong> comes with <code class="language-plaintext highlighter-rouge">pip install hl7</code>.</li>
+<li><strong>Canadian patients.</strong> Put <a href="https://github.com/synthetichealth/synthea-international">synthea-international</a>'s <code class="language-plaintext highlighter-rouge">ca/</code> first on the classpath; <a href="week-1.html">week 1</a> shows the command.</li>
+</ul>
 
 <h1 id="how-this-was-tested-31-oct-2026">How this was tested (31 Oct 2026)</h1>
 
@@ -58,6 +71,17 @@ java<span class="w"> </span>-jar<span class="w"> </span>validator_cli.jar<span c
 <tr><td>Libraries</td><td>HAPI FHIR 8.2.0, HAPI HL7v2 2.6.0, Firely 6.8.0, fhirclient 4.4.0 and 3.0.1, python-hl7 0.4.5 (on OpenJDK 25, .NET 8, Node 20, Python 3.12)</td><td>The four katas and their extras</td></tr>
 </tbody></table>
 </div>
+
+<h1 id="not-tested-yet">Not tested yet</h1>
+
+<ul>
+<li>The VXU stretch exercise (week 3).</li>
+<li>Case 1 of the broken message set (week 3).</li>
+<li>SMART in a browser or a real EHR (week 4).</li>
+<li>CDS Hooks inside an EHR (week 4).</li>
+<li>Bulk FHIR with backend-services authentication (week 4).</li>
+<li>The 1–2 h estimate for each secondary stack (week 0).</li>
+</ul>
 
 <hr>
 

@@ -37,28 +37,59 @@
     <div id="content">
     <h1 class="title">Glossary</h1>
 
-<p>Short definitions of terms used across the course. In week 1 you start your own glossary.</p>
+<p>Short definitions of terms used across the course, with the week that first explains each. In week 1 you start your own glossary.</p>
 
 <div class="table-wrap">
-<table><thead><tr><th>Term</th><th>Meaning</th></tr></thead><tbody>
-<tr><td>ACK</td><td>Reply to an HL7 v2 message: AA accept, AE error, AR reject</td></tr>
-<tr><td>ADT</td><td>Admit/discharge/transfer messages about patient movement</td></tr>
-<tr><td>BAA</td><td>HIPAA contract with a vendor that handles PHI</td></tr>
-<tr><td>C-CDA</td><td>The main US clinical-document format</td></tr>
-<tr><td>EMPI</td><td>Enterprise index linking one person's MRNs</td></tr>
-<tr><td>FHIR</td><td>HL7's REST API standard for health data</td></tr>
-<tr><td>HAPI</td><td>Open-source Java FHIR and HL7 v2 libraries and server</td></tr>
-<tr><td>LOINC</td><td>Codes for lab tests and observations</td></tr>
-<tr><td>MLLP</td><td>HL7 v2's framing over TCP</td></tr>
-<tr><td>MRN</td><td>Medical record number, issued per facility</td></tr>
-<tr><td>OCAP®</td><td>First Nations principles: ownership, control, access, possession</td></tr>
-<tr><td>OIE</td><td>Open Integration Engine, the open fork of Mirth Connect</td></tr>
-<tr><td>PHI</td><td>Protected (US) or personal (Canada) health information</td></tr>
-<tr><td>RxNorm</td><td>US normalized drug concepts</td></tr>
-<tr><td>SMART on FHIR</td><td>App-launch and OAuth profile for FHIR</td></tr>
-<tr><td>SNOMED CT</td><td>Clinical terminology for findings and procedures</td></tr>
-<tr><td>TEFCA</td><td>US national framework for health information exchange</td></tr>
-<tr><td>Z-segment</td><td>Site-defined HL7 v2 segment; its name starts with Z</td></tr>
+<table><thead><tr><th>Term</th><th>Meaning</th><th>Week</th></tr></thead><tbody>
+<tr><td>ACK</td><td>Reply to an HL7 v2 message: AA accept, AE error, AR reject</td><td>3</td></tr>
+<tr><td>ADT</td><td>Admit, discharge, transfer: the HL7 v2 messages a hospital sends when a patient arrives, moves or leaves</td><td>1, 3</td></tr>
+<tr><td>BAA</td><td>Business associate agreement: the contract HIPAA requires before a vendor may handle PHI</td><td>5</td></tr>
+<tr><td>Bundle</td><td>A FHIR resource that holds a list of other resources, such as search results or a transaction</td><td>0</td></tr>
+<tr><td>C-CDA</td><td>The main US clinical-document format</td><td>2</td></tr>
+<tr><td>CA Baseline</td><td>Canada's national starting set of FHIR profiles</td><td>4</td></tr>
+<tr><td>CACDI</td><td>Canadian Core Data for Interoperability: the list of data Canadian systems should be able to exchange</td><td>4</td></tr>
+<tr><td>Canary</td><td>A fake, distinctive identifier put in test data; if it shows up in a log, something leaked</td><td>5</td></tr>
+<tr><td>CDS Hooks</td><td>A standard that lets an EHR call an outside service at set moments and show its advice as cards</td><td>4</td></tr>
+<tr><td>Channel</td><td>In an integration engine, one configured route: a source that receives messages and destinations that send them on</td><td>6</td></tr>
+<tr><td>Conditional update</td><td>A FHIR write that says “update the resource that matches this search, or create it”; the course's upsert</td><td>0, 3</td></tr>
+<tr><td>EHR</td><td>Electronic health record: the main clinical system a hospital or clinic runs</td><td>0</td></tr>
+<tr><td>EMPI</td><td>Enterprise master patient index: the system that works out which record numbers belong to the same person</td><td>3</td></tr>
+<tr><td>Encounter</td><td>One interaction between a patient and a provider: a visit, a hospital stay, a video call</td><td>1</td></tr>
+<tr><td>Feed</td><td>The stream of messages one system sends to another</td><td>3, 6</td></tr>
+<tr><td>FHIR</td><td>Fast Healthcare Interoperability Resources: HL7's modern standard for health data, as JSON over a REST API</td><td>0, 4</td></tr>
+<tr><td>HAPI</td><td>Open-source Java FHIR and HL7 v2 libraries and server</td><td>0</td></tr>
+<tr><td>HbA1c</td><td>A blood test that reflects average blood glucose over the previous few months</td><td>2</td></tr>
+<tr><td>HIPAA</td><td>The US federal law that sets privacy and security rules for health information</td><td>5</td></tr>
+<tr><td>HL7 v2</td><td>The older, pipe-delimited message standard that most hospital systems still use to talk to each other</td><td>3</td></tr>
+<tr><td>ICD-10</td><td>Diagnosis codes used on claims and in statistics (ICD-10-CM in the US, ICD-10-CA in Canada)</td><td>2</td></tr>
+<tr><td>Idempotent</td><td>Safe to repeat: doing it twice leaves the same state as doing it once</td><td>3</td></tr>
+<tr><td>Integration engine</td><td>Software that receives each feed once and routes, transforms and retries it for every system that needs it</td><td>3, 6</td></tr>
+<tr><td>Interface</td><td>A configured connection that carries one kind of message between two systems</td><td>3</td></tr>
+<tr><td>Interface spec</td><td>The written contract between the team that sends a feed and the team that receives it</td><td>6</td></tr>
+<tr><td>Kata</td><td>A small exercise you repeat until the moves are automatic</td><td>0</td></tr>
+<tr><td>LOINC</td><td>Codes for lab tests and observations</td><td>2</td></tr>
+<tr><td>MLLP</td><td>Minimal Lower Layer Protocol: the small wrapper that marks where each HL7 v2 message starts and ends on a TCP connection</td><td>3</td></tr>
+<tr><td>MRN</td><td>Medical record number, issued per facility</td><td>0, 1</td></tr>
+<tr><td>OCAP®</td><td>First Nations principles: ownership, control, access, possession</td><td>5</td></tr>
+<tr><td>OIE</td><td>Open Integration Engine, the open fork of Mirth Connect</td><td>6</td></tr>
+<tr><td>Payer</td><td>Whoever pays for care: an insurer, or a provincial health plan in Canada</td><td>4</td></tr>
+<tr><td>PHI</td><td>Protected (US) or personal (Canada) health information</td><td>5</td></tr>
+<tr><td>PHIPA</td><td>Ontario's Personal Health Information Protection Act</td><td>5</td></tr>
+<tr><td>PKCE</td><td>Proof Key for Code Exchange: the step in an OAuth login that stops a stolen authorization code from being used</td><td>4</td></tr>
+<tr><td>Profile</td><td>A set of extra rules on top of base FHIR, such as required fields and allowed codes</td><td>0, 4</td></tr>
+<tr><td>Resource</td><td>One FHIR record of one type, such as a Patient or an Observation</td><td>0</td></tr>
+<tr><td>Runbook</td><td>The step-by-step operations guide for whoever is on call</td><td>6</td></tr>
+<tr><td>RxNorm</td><td>US normalized drug concepts</td><td>2</td></tr>
+<tr><td>Scope</td><td>One permission inside an access token, such as “read this patient's Observations”</td><td>4</td></tr>
+<tr><td>SMART on FHIR</td><td>The standard way an app signs in to an EHR and gets permission to read a patient's FHIR data</td><td>4</td></tr>
+<tr><td>SNOMED CT</td><td>Clinical terminology for findings and procedures</td><td>2</td></tr>
+<tr><td>Synthea</td><td>An open-source generator of realistic synthetic patients</td><td>0</td></tr>
+<tr><td>TEFCA</td><td>US national framework for health information exchange</td><td>4</td></tr>
+<tr><td>UCUM</td><td>Standard codes for units of measure, such as mg/dL</td><td>2</td></tr>
+<tr><td>Upsert</td><td>Update the record if it exists, create it if it doesn't</td><td>0</td></tr>
+<tr><td>US Core</td><td>The FHIR profiles the US uses for its core data</td><td>0, 4</td></tr>
+<tr><td>USCDI</td><td>United States Core Data for Interoperability: the list of data US systems must be able to exchange</td><td>4</td></tr>
+<tr><td>Z-segment</td><td>Site-defined HL7 v2 segment; its name starts with Z</td><td>3</td></tr>
 </tbody></table>
 </div>
 

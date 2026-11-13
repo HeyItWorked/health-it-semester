@@ -56,12 +56,14 @@ and de-identification. We add an audit log to the week-3 bridge, write canary
 tests that fail CI when identifiers escape, break a naive MRN pseudonym in half
 a second, and finish with rules for AI coding tools.</p>
 
-<p>Every command on this page was run on 31 Oct 2026 against the course lab: a
-local HAPI FHIR 8.12.0 server in Docker, python-hl7 0.4.5, pytest 9.2.0, socat
-1.8.0.0, OpenSSL 3.0.13, git 2.43.0 and jq 1.7. The outputs are copied from
-those runs. Yours will differ in
-timestamps, keys, hashes and server ids. All patient data on this page is
-made up.</p>
+<h1 id="done-when">Done when</h1>
+
+<p>This week you build a PHI canary test, an audit log and an AGENTS.md. You are done when:</p>
+
+<ul>
+  <li>CI fails if a canary reaches the logs.</li>
+  <li>The audit log answers “who touched patient X, and when?”</li>
+</ul>
 
 <h1 id="what-counts-as-phi">What counts as PHI</h1>
 
@@ -108,8 +110,10 @@ and <code class="language-plaintext highlighter-rouge">PID-20</code> driver's li
 lines at the end are this week's first bug; we'll come back to them.</p>
 
 <blockquote>
-  <p><strong>Canada:</strong> PHIPA, HIA and the other provincial acts; Quebec's
-  Law 5; OCAP® for First Nations data.</p>
+  <p><strong>Canada:</strong> there is no single law. Each province has its own
+  health-privacy act (PHIPA in Ontario, HIA in Alberta, Law 5 in Quebec), and
+  First Nations data follows the OCAP® principles. Find out which act applies
+  before you design storage or logging.</p>
 </blockquote>
 
 <h1 id="minimum-necessary">Minimum necessary</h1>
@@ -125,7 +129,7 @@ It does apply to the reports, extracts and feeds that engineers build all day.</
 <p>For an interface, minimum necessary is a mapping decision. The week-3 bridge
 receives a full <code class="language-plaintext highlighter-rouge">PID</code> segment, address included, and maps only what
 the downstream system needs: identifier, name, sex and birth date. The address is
-dropped on the floor, and the FHIR server never has it:</p>
+discarded, so the FHIR server never has it:</p>
 
 <div class="language-console highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="gp">$ </span>curl<span class="w"> </span>-s<span class="w"> </span>localhost:8080/fhir/Patient/1001<span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-c<span class="w"> </span><span class="s1">'del(.meta)'</span>
 <span class="go">{"resourceType":"Patient","id":"1001","identifier":[{"system":"https://genhosp.example.org/mrn","value":"100236"}],"active":true,"name":[{"family":"TREMBLAY","given":["LUC"]}],"gender":"male","birthDate":"1980-02-14"}</span>
@@ -256,7 +260,8 @@ We didn't build that here; the JSON-lines file is the shape, not the storage.</p
 
 <h1 id="leak-paths">Leak paths</h1>
 
-<p>Leak paths: logs, git history, tickets, screenshots, crash dumps, AI prompts.
+<p>PHI escapes through six everyday routes: logs, git history, tickets,
+screenshots, crash dumps and AI prompts.
 None of them is a database, so none of them is protected like one, and each is
 copied, retained and shared by default. Here is how each one happens and what
 stops it:</p>
@@ -274,16 +279,18 @@ stops it:</p>
 
 <h2 id="structured-logs">Structured logs</h2>
 
-<p>Structured logs with MSH-10 and resource ids, never names or MRNs. The bridge
-log above has a control ID, an ACK code and a resource URL per line: enough to
+<p>Log the message's control ID (MSH-10) and the FHIR resource id, never a name
+or an MRN. The bridge log above does exactly that. It
+has a control ID, an ACK code and a resource URL per line: enough to
 trace a message end to end, through the FHIR server where access is controlled
 and audited, and nothing about the patient.</p>
 
 <h2 id="phi-canary-test">The PHI canary test</h2>
 
 <p>“Never log PHI” is a policy, and policies decay one debug line at a time, so
-we make it a test. PHI canary test: fake identifiers in test messages; CI fails if
-any reach the logs. Ours drives the bridge's <code class="language-plaintext highlighter-rouge">process()</code> with the
+we make it a test. A PHI canary test sends messages full of fake identifiers
+through the code and fails CI if any of them shows up in a log. Ours drives the
+bridge's <code class="language-plaintext highlighter-rouge">process()</code> with the
 canary message along every path (accepted, missing MRN, bad birth date, unknown
 authority, production ID, FHIR down) and searches everything logged at
 <code class="language-plaintext highlighter-rouge">DEBUG</code>, plus the audit file:</p>
@@ -442,8 +449,8 @@ purge here.</p>
 
 <h1 id="transport-security">MLLP on the wire</h1>
 
-<p>Transport security: MLLP is plaintext, so run it over TLS or a VPN. Week 3
-watched the MLLP bytes go by; this time we look at what an eavesdropper on the
+<p>MLLP sends everything as plain text, so it must run inside TLS or a VPN. In
+week 3 we watched the MLLP bytes go by; this time we look at what an eavesdropper on the
 network sees. <code class="language-plaintext highlighter-rouge">socat -v</code> sits between the sender and the bridge and
 writes everything that passes to a file:</p>
 
@@ -486,9 +493,9 @@ known sender can connect. Write the choice in the interface spec.</p>
 <h1 id="redaction">Redaction: allowlist, not blocklist</h1>
 
 <p>Sometimes data must leave the hospital in reduced form: to a vendor
-debugging an interface, to an analytics team, to a test environment. The
-build list asks for allowlist redaction: keep set ID, a salted MRN
-pseudonym, birth year and sex. Here is the logic as first tested for this course (python-hl7):</p>
+debugging an interface, to an analytics team, to a test environment. We redact
+with an allowlist: keep only the set ID, a pseudonym for the MRN, the birth year
+and the sex. Here is the first version, using python-hl7:</p>
 
 <div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">KEEP</span> <span class="o">=</span> <span class="p">{</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">7</span><span class="p">,</span> <span class="mi">8</span><span class="p">}</span>  <span class="c1"># set ID, MRN, birth date, sex</span>
 <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">msg</span><span class="o">.</span><span class="n">segment</span><span class="p">(</span><span class="s2">"PID"</span><span class="p">))):</span>
@@ -501,7 +508,7 @@ pseudonym, birth year and sex. Here is the logic as first tested for this course
 
 <p>It names what to <em>keep</em> and blanks everything else. The tempting
 alternative is a blocklist naming what to <em>remove</em>. Both are in
-<a href="static/files/week-5/redact.py">redact.py</a>, and the first session on
+<a href="static/files/week-5/redact.py">redact.py</a>, and the first commands on
 this page already showed the difference: the blocklist output still ends with
 <code class="language-plaintext highlighter-rouge">D5550142^IL^20300101</code>, the driver's licence number in
 <code class="language-plaintext highlighter-rouge">PID-20</code>. <a href="static/files/week-5/test_redact.py">test_redact.py</a>
@@ -530,7 +537,7 @@ runs every canary message through both:</p>
 <span class="go">1 failed, 1 passed in 0.01s</span>
 </code></pre></div></div>
 
-<p>Blocklists: they miss the fields you didn't think of. <code class="language-plaintext highlighter-rouge">PID</code> has
+<p>A blocklist misses every field you didn't think of. <code class="language-plaintext highlighter-rouge">PID</code> has
 dozens of fields in 2.5.1, senders put things in unexpected places, and Z-segments
 can carry anything. An allowlist fails safe: a field you forgot is a field you
 dropped, and someone will ask for it, which is a much better failure than a
@@ -602,8 +609,8 @@ out.</p>
 
 <p>The redacted message keeps a pseudonym in place of the MRN, so that
 records from the same patient can still be linked. The obvious way to make one is
-to hash the MRN. Hashing MRNs without a secret salt: anyone can hash candidates
-and match. MRNs at our hospital have six digits, so there are a million
+to hash the MRN. That fails: without a secret, anyone can hash every possible MRN
+and look for a match. MRNs at our hospital have six digits, so there are a million
 candidates, and <a href="static/files/week-5/crack.py">crack.py</a> tries them
 all:</p>
 
@@ -641,9 +648,9 @@ phone numbers and birth dates are small spaces too. The fix is a keyed hash, HMA
 
 <p>The same MRN gives the same pseudonym under the same key, so linking still
 works. But anyone holding the key can reverse every pseudonym just as fast, so it
-belongs in a secrets manager, never in the repo, a ticket or a prompt. The original
-comment says <em>salted</em> SHA-256; the “salt” must be a secret key, and HMAC is
-the standard way to key a hash.</p>
+belongs in a secrets manager, never in the repo, a ticket or a prompt. People
+often call this a “salted” hash. An ordinary salt is not secret; here you need a
+secret key, and HMAC is the standard way to key a hash.</p>
 
 <h1 id="de-identification">De-identification</h1>
 
@@ -653,19 +660,32 @@ under HIPAA, and
 <a href="https://www.ecfr.gov/current/title-45/subtitle-A/subchapter-C/part-164/subpart-E/section-164.514">45 CFR 164.514</a>
 gives two ways to get there.</p>
 
-<p>De-identification: HIPAA Safe Harbor's 18 identifiers vs. expert
-determination; free text is hardest. <strong>Safe Harbor</strong> means
-removing all 18 listed identifiers, of the individual and of relatives,
-employers or household members, and having no actual knowledge that what's left
-could identify someone. The list: names; geographic subdivisions smaller than a
-state (street, city, county, ZIP code, with an exception for the first three ZIP
-digits of areas over 20,000 people); all elements of dates except the year, and
-all ages over 89; telephone numbers; fax numbers; email addresses; social security
-numbers; medical record numbers; health plan beneficiary numbers; account numbers;
-certificate and licence numbers; vehicle identifiers including licence plates;
-device identifiers and serial numbers; URLs; IP addresses; biometric identifiers
-such as finger and voice prints; full-face photographs and comparable images; and
-any other unique identifying number, characteristic or code.</p>
+<p><strong>Safe Harbor</strong> means removing all 18 listed identifiers, of the
+individual and of relatives, employers or household members, and having no actual
+knowledge that what's left could identify someone. The 18 are:</p>
+
+<ol>
+  <li>names</li>
+  <li>geographic subdivisions smaller than a state (street, city, county, ZIP
+  code, with an exception for the first three ZIP digits of areas over 20,000
+  people)</li>
+  <li>all elements of dates except the year, and all ages over 89</li>
+  <li>telephone numbers</li>
+  <li>fax numbers</li>
+  <li>email addresses</li>
+  <li>social security numbers</li>
+  <li>medical record numbers</li>
+  <li>health plan beneficiary numbers</li>
+  <li>account numbers</li>
+  <li>certificate and licence numbers</li>
+  <li>vehicle identifiers, including licence plates</li>
+  <li>device identifiers and serial numbers</li>
+  <li>URLs</li>
+  <li>IP addresses</li>
+  <li>biometric identifiers, such as finger and voice prints</li>
+  <li>full-face photographs and comparable images</li>
+  <li>any other unique identifying number, characteristic or code</li>
+</ol>
 
 <p>Compare our allowlist output. Birth year is allowed (except for ages over 89),
 and sex is. The pseudonym is the problem: §164.514(c) allows a re-identification
@@ -693,15 +713,20 @@ and since when, preserve what they need, then fix and clean up. Whether it's a
 breach is their call, under deadlines, so the clock starts when <em>you</em>
 notice.</p>
 
-<p>Breach duties: HIPAA notification; under PHIPA, patients and sometimes
-Ontario's privacy commissioner. Under HIPAA's
+<p>Under HIPAA's
 <a href="https://www.ecfr.gov/current/title-45/subtitle-A/subchapter-C/part-164/subpart-D">breach notification rule</a>,
-a covered entity notifies each affected individual without unreasonable delay and
-no later than 60 calendar days after discovering a breach of unsecured PHI. A
-breach affecting 500 or more people is also reported to HHS at the same time (and
-to prominent media when more than 500 residents of a state are affected); smaller
-breaches are logged and reported to HHS within 60 days after the end of the
-calendar year. A breach counts as discovered on the first day it is known, or
+a covered entity that discovers a breach of unsecured PHI must tell:</p>
+
+<div class="table-wrap">
+<table><thead><tr><th>Who is told</th><th>When</th></tr></thead><tbody>
+<tr><td>Each affected individual</td><td>Without unreasonable delay, and no later than 60 calendar days after discovery</td></tr>
+<tr><td>HHS, when 500 or more people are affected</td><td>At the same time as the individuals</td></tr>
+<tr><td>Prominent media, when more than 500 residents of one state are affected</td><td>At the same time as the individuals</td></tr>
+<tr><td>HHS, for smaller breaches</td><td>Logged, then reported within 60 days after the end of the calendar year</td></tr>
+</tbody></table>
+</div>
+
+<p>A breach counts as discovered on the first day it is known, or
 would have been known with reasonable diligence, which is why “I noticed it on
 Friday but wanted to check first” is a problem. Ontario's
 <a href="https://www.ontario.ca/laws/statute/04p03">PHIPA</a> requires notifying the
@@ -724,8 +749,8 @@ contract covering health data (in the US, usually a business associate agreement
 and has configured the tool; your personal account is not approved.</p>
 
 <p>Coding agents add a twist: they read your repo, run your tests and see your
-logs on their own. So write the rules where they will read them: an AGENTS.md with PHI rules for
-AI coding tools. Many agents look for an <a href="https://agents.md/">AGENTS.md</a>
+logs on their own. So write your PHI rules where the agent will read them. Many
+agents look for an <a href="https://agents.md/">AGENTS.md</a>
 file at the root of the repository; here is
 <a href="static/files/week-5/AGENTS.md">ours</a>:</p>
 
@@ -765,13 +790,6 @@ anyway.</p>
   <p><strong>AI this week:</strong> approved tools and synthetic data only; never
   paste logs, tickets or screenshots.</p>
 </blockquote>
-
-<h1 id="done-when">Done when</h1>
-
-<ul>
-  <li>CI fails if a canary reaches the logs.</li>
-  <li>The audit log answers “who touched patient X, and when?”</li>
-</ul>
 
 <h1 id="exercises">Exercises</h1>
 
@@ -832,6 +850,15 @@ anyway.</p>
   <li><a href="https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/removing-sensitive-data-from-a-repository">GitHub: removing sensitive data from a repository</a></li>
   <li><a href="https://agents.md/">AGENTS.md</a></li>
 </ul>
+
+<h1 id="tested-with">Tested with</h1>
+
+<p>Every command on this page was run on 31 Oct 2026 against the course lab: a
+local HAPI FHIR 8.12.0 server in Docker, python-hl7 0.4.5, pytest 9.2.0, socat
+1.8.0.0, OpenSSL 3.0.13, git 2.43.0 and jq 1.7. The outputs are copied from
+those runs. Yours will differ in
+timestamps, keys, hashes and server ids. All patient data on this page is
+made up.</p>
 
 <hr>
 

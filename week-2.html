@@ -44,14 +44,14 @@ department manager wants visits per month to plan staffing. A researcher wants
 everyone whose blood pressure was high last year. Each request sounds like one
 query, and each one hides decisions: which code counts as diabetes, what “last
 year” means, whether the count is of patients or of visits, what unit the number
-is in. The data is coded, unit-laden and messy, so two honest queries can
+is in. The data is full of standard codes and units, and it is messy, so two honest queries can
 disagree, and you have to explain why.</p>
 
 <p>Getting this wrong has consequences you can't see from the query. Count
 encounters instead of patients and a clinic looks busier than it is. Compare a
 glucose in mg/dL against a threshold in mmol/L and every patient becomes
 diabetic. Search on display text and patients with prediabetes land on a
-diabetes outreach list. Lose a care gap in a join and the patient who most
+diabetes outreach list. Write a join that drops patients with no test result, and the patient who most
 needs a phone call never gets one.</p>
 
 <p>This lecture generates one synthetic population, exports it twice (as CSV
@@ -61,12 +61,23 @@ every number that differs. Along the way we look at the code systems that make
 clinical data comparable, a clinical note that holds facts the codes don't, a
 FHIR search against a local server, and the Canadian version of the data.</p>
 
-<p>Every command on this page was run on 31 Oct 2026 against the course lab:
-Synthea (master build of 21 Oct 2026), PostgreSQL 16.11 in Docker
-(<code class="language-plaintext highlighter-rouge">postgres:16-alpine</code>), jq 1.7 and a local HAPI FHIR 8.12.0
-server. The outputs are
-copied from one run. Yours will differ in timestamps and container ids;
-with the same seeds, the patients and counts should match.</p>
+<p><strong>Words you need this week.</strong>
+<strong>HbA1c</strong>: a blood test that reflects average blood glucose over
+the previous few months; the usual check on how well diabetes is controlled.
+<strong>ED</strong>: emergency department. <strong>Care gap</strong>: a patient
+who should have had a test or treatment and has no record of it.
+<strong>Value set</strong>: a named list of codes that together mean one thing,
+such as “any diabetes”. <strong>Census</strong>: a count of the patients in a
+hospital or unit at one point in time.</p>
+
+<h1 id="done-when">Done when</h1>
+
+<p>This week you answer five clinical questions twice, in SQL and in jq. You are done when:</p>
+
+<ul>
+  <li>SQL and jq agree, or each difference is written up.</li>
+  <li>Canada track: no record carries a US identifier (exercise 10).</li>
+</ul>
 
 <h1 id="one-population-two-exports">One population, two exports</h1>
 
@@ -156,7 +167,7 @@ quick to grep and count:</p>
 <span class="go">{"effectiveDateTime":"2026-09-26T01:47:23-04:00","valueQuantity":{"value":8.21,"unit":"%","system":"http://unitsofmeasure.org","code":"%"},"code":[{"system":"http://loinc.org","code":"4548-4","display":"Hemoglobin A1c/Hemoglobin.total in Blood"}]}</span>
 </code></pre></div></div>
 
-<p>Already the shapes leak information differently. The CSV has a
+<p>The two formats already tell you different things. The CSV has a
 <code class="language-plaintext highlighter-rouge">CODE</code> column but no column saying which code system it belongs to;
 you have to know that observation codes are LOINC. It has one
 <code class="language-plaintext highlighter-rouge">VALUE</code> column for both numbers and words, with a <code class="language-plaintext highlighter-rouge">TYPE</code>
@@ -723,7 +734,7 @@ errors, and an active order for a patient who died is a common finding.</p>
 
 <h2 id="q5-glucose-and-units">Q5: glucose and units</h2>
 
-<p>The watch-out from the summary: comparing values without converting units.
+<p>This question is about a classic mistake: comparing values without converting units.
 Canadian labs report glucose in mmol/L; Synthea's US-style data is in mg/dL.
 Suppose a Canadian colleague asks for glucose results of 7.0 mmol/L or more in
 the last year. Glucose also has two common LOINC codes, for whole blood and for
@@ -832,7 +843,7 @@ panels (<code class="language-plaintext highlighter-rouge">X9999-0</code>, a pla
 plain Observations make 17,172 rows. The other
 693 CSV rows (DALY, QALY and QOLS: Synthea's quality-of-life measures) have no
 category and no FHIR Observation at all. 17,172 + 693 = 17,865. That is the
-kind of write-up “explain every count that differs” asks for. Here is the full
+level of detail to aim for when you explain a difference. Here is the full
 list from this lecture:</p>
 
 <div class="table-wrap">
@@ -939,10 +950,10 @@ as here.</p>
 
 <h1 id="fhir-search">The same questions from a FHIR server</h1>
 
-<p>The earlier version of this week ran its example against the public HAPI
+<p>We use a local HAPI server here, not the public HAPI
 test server. Public test servers hold whatever strangers upload, and you must
-never send them real data. We ran the same command against a local HAPI
-instead, so the data is our synthetic population. Synthea's bundles refer to
+never send them real data. With a local server
+the data is our synthetic population. Synthea's bundles refer to
 each other with <code class="language-plaintext highlighter-rouge">urn:uuid:</code> references that only resolve inside
 the bundle, so <a href="static/files/week-2/to-tx.jq">to-tx.jq</a> builds
 one small transaction with the 22 patients and their 228 HbA1c results and
@@ -981,7 +992,7 @@ rewrites the references to <code class="language-plaintext highlighter-rouge">Pa
 <span class="go">hapi</span>
 </code></pre></div></div>
 
-<p>The example is the one from the summary: <code class="language-plaintext highlighter-rouge">curl -G</code> sends the
+<p>Reading the command: <code class="language-plaintext highlighter-rouge">curl -G</code> sends the
 <code class="language-plaintext highlighter-rouge">-d</code> pairs as a query string, <code class="language-plaintext highlighter-rouge">_count</code> limits the page,
 <code class="language-plaintext highlighter-rouge">_elements</code> trims each resource, and jq turns the Bundle into
 tab-separated rows. The <code class="language-plaintext highlighter-rouge">?</code> in <code class="language-plaintext highlighter-rouge">.entry[]?</code> keeps an empty
@@ -1095,13 +1106,6 @@ driver's-licence identifier. We didn't build the mapping for this page.</p>
   only the SSN.</p>
 </blockquote>
 
-<h1 id="done-when">Done when</h1>
-
-<ul>
-  <li>SQL and jq agree, or each difference is written up.</li>
-  <li>Canada track: no record carries a US identifier.</li>
-</ul>
-
 <h1 id="exercises">Exercises</h1>
 
 <ol>
@@ -1154,6 +1158,15 @@ driver's-licence identifier. We didn't build the mapping for this page.</p>
   <li><a href="https://www.canada.ca/en/health-canada/services/drugs-health-products/drug-products/drug-product-database.html">Health Canada Drug Product Database (DIN)</a></li>
   <li><a href="https://open.canada.ca/data/en/dataset/3e0a7b9e-a5e9-4131-bde4-ac685a1f1a38">Canadian Clinical Drug Data Set (CCDD)</a></li>
 </ul>
+
+<h1 id="tested-with">Tested with</h1>
+
+<p>Every command on this page was run on 31 Oct 2026 against the course lab:
+Synthea (master build of 21 Oct 2026), PostgreSQL 16.11 in Docker
+(<code class="language-plaintext highlighter-rouge">postgres:16-alpine</code>), jq 1.7 and a local HAPI FHIR 8.12.0
+server. The outputs are
+copied from one run. Yours will differ in timestamps and container ids;
+with the same seeds, the patients and counts should match.</p>
 
 <hr>
 

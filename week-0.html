@@ -5,9 +5,9 @@
   <meta charset="utf-8">
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Week 0 of the Health IT Semester: Stack short runs.">
+  <meta name="description" content="Week 0 of the Health IT Semester: One exercise, four stacks.">
 
-  <title>Stack short runs &middot; Health IT Semester</title>
+  <title>One exercise, four stacks &middot; Health IT Semester</title>
 
   <link rel="stylesheet" href="static/css/main.css">
   <link rel="stylesheet" href="static/css/syntax.css">
@@ -35,7 +35,7 @@
 
 
     <div id="content">
-    <h1 class="title">Stack short runs</h1>
+    <h1 class="title">One exercise, four stacks</h1>
 <h2 class="subtitle">Week 0 · ~10 h: deep in one stack, 1–2 h each for the rest</h2>
 
 <p>Employers hire into a stack. A hospital that runs its integration on Java
@@ -51,7 +51,7 @@ records for one person: allergies on one, medications on the other, and the
 clinician sees only half. Write without checking versions and a phone number
 that registration just corrected is silently put back, so the clinic can't
 reach the patient with a result. These bugs look the same in every language,
-and so do the defences. Only the spelling changes.</p>
+and so do the defences. Only the syntax changes.</p>
 
 <p>This week we start a local FHIR server, give it one synthetic patient,
 learn the handful of REST calls the exercise needs, and then do the same kata
@@ -59,12 +59,24 @@ four times, once per stack, against the same patient. At the end we prove from
 the server's own history that each run wrote exactly once, and we push
 conditional updates until they fail, so you know what failure looks like.</p>
 
-<p>Every command on this page was run on 31 Oct 2026 against the course lab: a
-local HAPI FHIR 8.12.0 server in Docker, Synthea (master build of 21 Oct 2026),
-the HAPI FHIR 8.2.2 client on OpenJDK 25, Firely SDK 6.8.0 on .NET SDK 8.0.121,
-fhirclient 4.4.0 on Python 3.12, and fhirclient 3.0.1 with Express 5.3 on Node
-20. The outputs are copied from those runs. Yours will differ in timestamps,
-server ids and file names.</p>
+<p><strong>Words you need first.</strong>
+<strong>EHR</strong>: electronic health record, the hospital's main clinical
+system. <strong>FHIR</strong>: the standard that describes health data as JSON
+<em>resources</em> (Patient, Observation and so on) served over a REST API.
+<strong>Resource</strong>: one JSON document of one type.
+<strong>MRN</strong>: medical record number, the id a hospital gives a patient.
+<strong>Upsert</strong>: update the record if it exists, create it if it
+doesn't. <strong>Conditional PUT</strong>: FHIR's upsert, “update the Patient
+with this MRN, or create one”. Weeks 1 and 4 go deeper.</p>
+
+<h1 id="done-when">Done when</h1>
+
+<p>This week you build one FHIR kata in four stacks. You are done when:</p>
+
+<ul>
+  <li>Your main stack's kata passes; the other three run.</li>
+  <li>You can explain every request: method, URL, status (exercises 1 to 3 test this).</li>
+</ul>
 
 <h1 id="the-kata">The kata</h1>
 
@@ -196,8 +208,8 @@ about plain R4.</p>
 <p>The 200 is not HAPI being sloppy. The specification says
 <a href="https://hl7.org/fhir/R4/resource-operation-validate.html">this operation returns a 200 OK whether or not the resource is valid</a>;
 a 4xx or 5xx means the validation itself could not run. <code class="language-plaintext highlighter-rouge">$validate</code>
-returns an OperationOutcome: read every issue's severity. Watch out for
-trusting HTTP 200 from <code class="language-plaintext highlighter-rouge">$validate</code>; a client that checks the
+returns an OperationOutcome: read every issue's severity. Never trust an
+HTTP 200 from <code class="language-plaintext highlighter-rouge">$validate</code>: a client that checks the
 status code and moves on has validated nothing.</p>
 
 <blockquote>
@@ -642,8 +654,8 @@ empty.</p>
 <p>We didn't need express-session here, because we never ran a SMART launch:
 our server is open and needs no authorization. In a SMART app the library
 keeps the launch state in <code class="language-plaintext highlighter-rouge">req.session</code> between the redirect to
-the authorization server and the return; that is why the table says SMART
-needs express-session.</p>
+the authorization server and the return; that is why SMART needs
+express-session (see the table below).</p>
 
 <h2 id="what-differs">What differs, and what doesn't</h2>
 
@@ -651,18 +663,19 @@ needs express-session.</p>
 <table>
 <thead><tr><th>Stack</th><th>Library (tested)</th><th>Gotcha we hit</th></tr></thead>
 <tbody>
-<tr><td>Java</td><td>HAPI FHIR 8.2, HAPI HL7v2 2.6 (OIE itself is Java)</td><td>Default HL7v2 validation rejects a bad PID-7</td></tr>
+<tr><td>Java</td><td>HAPI FHIR 8.2 (OIE itself is Java)</td><td>The client hides HTTP status codes; an interceptor exposes them</td></tr>
 <tr><td>C#</td><td>Firely SDK 6.8 on .NET 8 (Azure's FHIR service is built on it)</td><td><code class="language-plaintext highlighter-rouge">ValidateResourceAsync</code> is missing from the XML docs</td></tr>
-<tr><td>Python</td><td>fhirclient 4.4, python-hl7 0.4.5</td><td><code class="language-plaintext highlighter-rouge">fhir.resources</code> no longer ships R4</td></tr>
+<tr><td>Python</td><td>fhirclient 4.4</td><td>No helper for a conditional update, and no status codes without a hook</td></tr>
 <tr><td>TypeScript</td><td>fhirclient 3.0, Express</td><td>Import <code class="language-plaintext highlighter-rouge">fhirclient/node</code>; SMART needs express-session</td></tr>
 </tbody>
 </table>
 </div>
 
-<p>We installed those versions of the FHIR clients: HAPI FHIR 8.2.2,
-Hl7.Fhir.R4 6.8.0, fhirclient 4.4.0 and fhirclient 3.0.1. The HL7 v2 libraries
-belong to week 3 and the extras; we didn't install them this week, and we
-didn't re-run the HL7v2 and <code class="language-plaintext highlighter-rouge">fhir.resources</code> gotchas.</p>
+<p>We installed these versions of the FHIR clients: HAPI FHIR 8.2.2,
+Hl7.Fhir.R4 6.8.0, fhirclient 4.4.0 and fhirclient 3.0.1. Two more gotchas wait
+for later weeks, and we did not re-run them this week: HAPI HL7v2's default
+validation rejects a bad <code class="language-plaintext highlighter-rouge">PID-7</code> (week 3 and the Java extra), and the Python
+package <code class="language-plaintext highlighter-rouge">fhir.resources</code> no longer ships R4.</p>
 
 <p>The shape is identical in all four; the friction moves around. Java needs
 the most ceremony: a build file, a fluent API and an interceptor just to see
@@ -778,7 +791,7 @@ message as often as it likes, and the record ends up the same.</p>
 <span class="go">HAPI-0988: Failed to UPDATE Patient with match URL "Patient?identifier=http://example.org/mrn|100236" because this search matched 2 resources</span>
 </code></pre></div></div>
 
-<p>Watch out for using POST for upserts: two POSTs made two patients in our
+<p>Don't use POST for upserts. Two POSTs made two patients in our
 test, with the same MRN, and the server accepted both without complaint,
 because a plain create doesn't search first. Now the
 conditional PUT can't decide which record to update, so it refuses with 412
@@ -842,18 +855,18 @@ If you need both, find the record by identifier, then update it by id with
   one you deploy before you rely on either behaviour.</p>
 </blockquote>
 
-<h1 id="awareness-stacks">Awareness stacks</h1>
+<h1 id="awareness-stacks">Three more stacks to recognise</h1>
 
-<p>You will meet more than four stacks. <strong>Awareness, in Docker:</strong>
-PowerShell, InterSystems IRIS (use InterSystems' registry; Docker Hub's image
-crashed for us) and MUMPS via YottaDB. PowerShell turns up in Windows-heavy
+<p>You will meet more than four stacks. Three more are worth an hour each in a
+container, just so you recognise them in a job description: PowerShell,
+InterSystems IRIS and MUMPS (via YottaDB). PowerShell turns up in Windows-heavy
 hospital IT for scripting servers and interfaces. InterSystems IRIS is the
 platform under InterSystems' health products, including the HealthShare
-Health Connect integration engine. MUMPS is a programming language with its
-own built-in database, and YottaDB is an open-source implementation of it.
-An hour with each
-in a container is enough to recognise them in a job description. Those notes
-are from earlier runs of this course; we didn't re-run them for this page.</p>
+Health Connect integration engine; pull its image from InterSystems' own
+registry, because the Docker Hub image crashed for us. MUMPS is a programming
+language with its own built-in database, and YottaDB is an open-source
+implementation of it. We last ran these three before this version of the
+course and did not re-test them.</p>
 
 <p>Pick the stack you want to be hired into and go deep: make its kata yours,
 then add the extras in the exercises. Give the other three an hour or two each,
@@ -863,13 +876,6 @@ enough to read their code and run it.</p>
   <p><strong>AI this week:</strong> let it scaffold files in an unfamiliar
   stack; write the assertions yourself.</p>
 </blockquote>
-
-<h1 id="done-when">Done when</h1>
-
-<ul>
-  <li>Your main stack's kata passes; the other three run.</li>
-  <li>You can explain every request: method, URL, status.</li>
-</ul>
 
 <h1 id="exercises">Exercises</h1>
 
@@ -894,7 +900,7 @@ enough to read their code and run it.</p>
   once with different numbers. One should fail with 409 (on HAPI) or 412;
   make the kata say which.</li>
   <li>Validate the US Core version of Corie with the HL7 validator
-  (<code class="language-plaintext highlighter-rouge">validator_cli.jar</code> from the lab downloads, with the US Core
+  (<code class="language-plaintext highlighter-rouge">validator_cli.jar</code> from the <a href="overview.html#before-you-start-prework-4-h">prework</a>, with the US Core
   package loaded) instead of the server. Which of the two errors disappear,
   and do new ones appear?</li>
   <li>Java extra: with HAPI HL7v2, parse an ADT message with an impossible
@@ -925,6 +931,15 @@ enough to read their code and run it.</p>
   <li><a href="https://hl7.org/fhir/us/core/">US Core implementation guide</a></li>
   <li><a href="https://simplifier.net/guide/CA-Core/Index/Home.page.md?version=current">CA Core+ implementation guide</a></li>
 </ul>
+
+<h1 id="tested-with">Tested with</h1>
+
+<p>Every command on this page was run on 31 Oct 2026 against the course lab: a
+local HAPI FHIR 8.12.0 server in Docker, Synthea (master build of 21 Oct 2026),
+the HAPI FHIR 8.2.2 client on OpenJDK 25, Firely SDK 6.8.0 on .NET SDK 8.0.121,
+fhirclient 4.4.0 on Python 3.12, and fhirclient 3.0.1 with Express 5.3 on Node
+20. The outputs are copied from those runs. Yours will differ in timestamps,
+server ids and file names.</p>
 
 <hr>
 

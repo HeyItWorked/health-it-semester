@@ -39,15 +39,43 @@
 
 <h1 id="before-you-start-prework-4-h">Before you start (prework, ~4 h)</h1>
 
-<p>Install Docker, JDK 17+, Python 3, Node 20 and the .NET 8 SDK. Watch MIT Missing Semester's shell, git and development-environment lectures. Create one git repo for the whole course. The commands for the lab are on the
-<a href="lab-setup.html">lab setup</a> page.</p>
+<p>Do these four things before week 0. The commands in the weeks assume all of them.</p>
+
+<ol>
+<li><p><strong>Install the tools, then check each one.</strong> Every command below except the last should print a version number.</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>docker --version     # HAPI FHIR, PostgreSQL, OIE
+java -version        # 17+: Synthea, validator, Java kata
+mvn -version         # Maven: Java kata (week 0)
+python3 --version    # bridge and tests (weeks 3 to 6)
+node --version       # 20: TypeScript kata, SMART app
+dotnet --version     # .NET 8 SDK: C# kata
+jq --version         # every week
+socat -V             # weeks 3 and 5
+pip install hl7      # gives mllp_send (weeks 3 to 6)
+</code></pre></div></div></li>
+<li><p><strong>Download two jars</strong> into the folder you will work in:
+<a href="https://github.com/synthetichealth/synthea/releases/download/master-branch-latest/synthea-with-dependencies.jar">synthea-with-dependencies.jar</a>, which generates synthetic patients, and
+<a href="https://github.com/hapifhir/org.hl7.fhir.core/releases/latest/download/validator_cli.jar">validator_cli.jar</a>, the HL7 FHIR validator.</p></li>
+<li><p><strong>Watch</strong> MIT Missing Semester's shell, git and development-environment lectures.</p></li>
+<li><p><strong>Create one git repo</strong> for the whole course. A layout is suggested below.</p></li>
+</ol>
+
+<p>Then start the practice server on the <a href="lab-setup.html">lab setup</a> page to check that everything works.</p>
+
+<h1 id="how-to-read-a-week">How to read a week</h1>
+
+<p>Each week opens with a “Done when” list: the target for the week. Then comes the lecture. Type its commands yourself, in your own repo; your output should match ours except for timestamps, ids and file names. Then do the exercises. The done-when list says which ones it depends on.</p>
+
+<p>Three labels recur. A <strong>session</strong> is one terminal block: the commands we typed and the output we got. A <strong>Tested</strong> note records what we actually saw, including where a tool disagreed with its specification. A <strong>Canada</strong> note says what changes in Canada.</p>
 
 <h1 id="by-the-end-you-can">By the end you can</h1>
+
+<p>New words such as FHIR, HL7 v2 and PHI are defined in the <a href="glossary.html">glossary</a>, and each week introduces the ones it needs.</p>
 
 <ul>
 <li>Trace an encounter and say who recorded each fact, and where it lives in FHIR.</li>
 <li>Answer clinical questions in SQL and jq, and explain why two answers differ.</li>
-<li>Receive HL7 v2 over MLLP, ACK honestly, and upsert FHIR without duplicates.</li>
+<li>Receive HL7 v2 messages, acknowledge them only after they are safely stored, and write them to a FHIR server without creating duplicate patients.</li>
 <li>Validate FHIR against US Core or CA Baseline in CI.</li>
 <li>Keep PHI out of logs, prompts and git, and prove it with tests.</li>
 <li>Ship a stack a reviewer can run in 10 minutes, with a runbook and an interface spec.</li></ul>
